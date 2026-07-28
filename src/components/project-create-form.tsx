@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { cn, formatFileSize } from "@/lib/utils";
 import type { ProductionBrief } from "@/types/analysis";
+import type { BrandStyleProfile } from "@/types/style";
 
 type MediaChoice = "video" | "photos" | "audio";
 
@@ -33,8 +34,6 @@ const purposes = [
   "自訂",
 ];
 const platforms = ["Facebook", "Instagram", "Threads", "TikTok", "YouTube"];
-const styles = ["專業", "親切", "活潑", "故事感", "新聞報導", "高級質感"];
-
 const mediaSettings: Record<
   MediaChoice,
   {
@@ -71,6 +70,7 @@ const mediaSettings: Record<
 export function ProjectCreateForm({
   initialType = "video",
   providerStatus,
+  brandStyles,
 }: {
   initialType?: MediaChoice;
   providerStatus: {
@@ -78,6 +78,7 @@ export function ProjectCreateForm({
     missing: readonly string[];
     message: string | null;
   };
+  brandStyles: BrandStyleProfile[];
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +93,9 @@ export function ProjectCreateForm({
   const [purpose, setPurpose] = useState("");
   const [customPurpose, setCustomPurpose] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
-  const [style, setStyle] = useState("");
+  const [selectedStyleId, setSelectedStyleId] = useState(
+    brandStyles[0]?.id ?? "",
+  );
   const [originalRequest, setOriginalRequest] = useState("");
   const [targetDuration, setTargetDuration] =
     useState<ProductionBrief["targetDuration"]>("由 AI 建議");
@@ -175,7 +178,7 @@ export function ProjectCreateForm({
     if (step === 0) return files.length > 0 && originalRequest.trim().length >= 5;
     if (step === 1) return purpose && (purpose !== "自訂" || customPurpose.trim());
     if (step === 2) return selectedPlatforms.length > 0;
-    if (step === 3) return Boolean(style && targetDuration);
+    if (step === 3) return Boolean(selectedStyleId && targetDuration);
     return true;
   }
 
@@ -209,7 +212,9 @@ export function ProjectCreateForm({
         originalRequest: originalRequest.trim(),
         purpose: purpose === "自訂" ? customPurpose.trim() : purpose,
         platforms: selectedPlatforms,
-        style,
+        style:
+          brandStyles.find((item) => item.id === selectedStyleId)?.style_name ??
+          "",
         targetDuration,
         additionalNotes: additionalNotes.trim(),
       };
@@ -217,6 +222,7 @@ export function ProjectCreateForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          styleProfileId: selectedStyleId,
           brief,
           file: {
             name: files[0].name,
@@ -526,10 +532,31 @@ export function ProjectCreateForm({
         {step === 3 && (
           <section>
             <StepTitle
-              title="你希望內容是什麼感覺？"
-              description="先選一種主要風格，之後仍可自行修改。"
+              title="套用哪一套我的風格？"
+              description="AI 會優先依照這套品牌設定產生文案與剪輯腳本。"
             />
-            <ChoiceGrid options={styles} value={style} onChange={setStyle} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {brandStyles.map((brandStyle) => (
+                <button
+                  key={brandStyle.id}
+                  type="button"
+                  onClick={() => setSelectedStyleId(brandStyle.id)}
+                  className={cn(
+                    "rounded-2xl border p-4 text-left transition",
+                    selectedStyleId === brandStyle.id
+                      ? "border-[#deb5bb]/35 bg-[#deb5bb]/10"
+                      : "border-white/[0.07] bg-white/[0.02] hover:border-white/15",
+                  )}
+                >
+                  <p className="text-sm font-medium text-white">
+                    {brandStyle.style_name}
+                  </p>
+                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-600">
+                    {brandStyle.brand_description}
+                  </p>
+                </button>
+              ))}
+            </div>
             <div className="mt-7">
               <p className="mb-3 text-sm font-medium text-zinc-300">
                 希望的影片長度
@@ -570,7 +597,13 @@ export function ProjectCreateForm({
                 value={purpose === "自訂" ? customPurpose : purpose}
               />
               <SummaryRow label="平台" value={selectedPlatforms.join("、")} />
-              <SummaryRow label="風格" value={style} />
+              <SummaryRow
+                label="本次使用風格"
+                value={
+                  brandStyles.find((item) => item.id === selectedStyleId)
+                    ?.style_name ?? ""
+                }
+              />
               <SummaryRow label="影片長度" value={targetDuration} />
               <SummaryRow label="製作需求" value={originalRequest} />
             </div>

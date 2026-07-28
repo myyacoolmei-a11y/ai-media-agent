@@ -51,7 +51,7 @@ export async function POST(_request: Request, context: RouteContext) {
     );
   }
 
-  await createAnalysisTasks(projectId);
+  await createAnalysisTasks(projectId, access.user.id);
   await access.supabase
     .from("projects")
     .update({ status: "processing", error: null })

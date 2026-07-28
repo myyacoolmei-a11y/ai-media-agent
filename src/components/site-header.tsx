@@ -1,6 +1,7 @@
 import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 
+import { AccountMenu } from "@/components/account-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ export function SiteHeader({ compact = false }: { compact?: boolean }) {
           <Logo />
         </Link>
         <nav className="flex items-center gap-1">
+          <AccountMenu />
           <Link
             href="/projects/new"
             className={cn(buttonVariants({ size: "sm" }), "group")}

@@ -7,6 +7,7 @@ import { assertProvidersConfigured } from "@/lib/providers/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { productionBriefSchema } from "@/types/analysis";
 import type { AiTaskType } from "@/types/domain";
+import { brandStyleInputSchema } from "@/types/style";
 
 const generationTasks: AiTaskType[] = [
   "summarize",
@@ -35,7 +36,7 @@ async function updateTask(
   }
 }
 
-export async function createAnalysisTasks(projectId: string) {
+export async function createAnalysisTasks(projectId: string, userId: string) {
   const supabase = createAdminClient();
   const taskTypes: AiTaskType[] = [
     "extract_audio",
@@ -45,6 +46,7 @@ export async function createAnalysisTasks(projectId: string) {
   ];
   const { error } = await supabase.from("ai_tasks").insert(
     taskTypes.map((type) => ({
+      user_id: userId,
       project_id: projectId,
       type,
       status: "queued",
@@ -73,7 +75,7 @@ export async function processProject(
       await Promise.all([
         supabase
           .from("projects")
-          .select("id, brief")
+          .select("id, user_id, style_profile_id, brief")
           .eq("id", projectId)
           .single(),
         supabase
@@ -92,6 +94,16 @@ export async function processProject(
     }
 
     const brief = productionBriefSchema.parse(project.brief);
+    const { data: brandStyle, error: styleError } = await supabase
+      .from("brand_style_profiles")
+      .select("*")
+      .eq("id", project.style_profile_id)
+      .eq("user_id", project.user_id)
+      .single();
+    if (styleError || !brandStyle) {
+      throw new Error("The selected Brand Style Profile could not be loaded.");
+    }
+    const brandStyleForAi = brandStyleInputSchema.parse(brandStyle);
     await supabase
       .from("projects")
       .update({ status: "processing", error: null })
@@ -164,6 +176,7 @@ export async function processProject(
       transcript = await providers.transcription.transcribe(processed.audioPath);
       const { error } = await supabase.from("transcripts").upsert(
         {
+          user_id: project.user_id,
           media_id: media.id,
           language: transcript.language,
           text: transcript.text,
@@ -193,6 +206,7 @@ export async function processProject(
     const result = await providers.llm.generate({
       transcript,
       brief,
+      brandStyle: brandStyleForAi,
       videoDurationSeconds: processed.durationSeconds,
       frames: processed.frames,
     });
@@ -205,6 +219,7 @@ export async function processProject(
       .maybeSingle();
     const version = (latestResult?.version ?? 0) + 1;
     const { error: resultError } = await supabase.from("ai_results").insert({
+      user_id: project.user_id,
       project_id: projectId,
       model: process.env.OPENAI_LLM_MODEL || "gpt-4o-mini",
       version,

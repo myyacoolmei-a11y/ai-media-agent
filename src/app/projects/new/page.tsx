@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { ProjectCreateForm } from "@/components/project-create-form";
+import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { getProviderStatus } from "@/lib/providers/config";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { BrandStyleProfile } from "@/types/style";
 
 export const metadata: Metadata = {
   title: "開始製作內容",
@@ -18,6 +22,15 @@ export default async function NewProjectPage({
   const initialType =
     type === "photos" || type === "audio" || type === "video" ? type : "video";
   const providerStatus = getProviderStatus();
+  const user = await getAuthenticatedUser();
+  if (!user) redirect("/login?next=/projects/new");
+  const { data } = await createAdminClient()
+    .from("brand_style_profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+  const brandStyles = (data ?? []) as BrandStyleProfile[];
+  if (!brandStyles.length) redirect("/styles/new");
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -33,6 +46,7 @@ export default async function NewProjectPage({
         <ProjectCreateForm
           initialType={initialType}
           providerStatus={providerStatus}
+          brandStyles={brandStyles}
         />
       </div>
     </div>

@@ -2,6 +2,8 @@
 
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
   Check,
   Copy,
   Eye,
@@ -11,6 +13,7 @@ import {
   Pencil,
   RefreshCw,
   Save,
+  Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -90,6 +93,7 @@ export function ResultsView({ projectId }: { projectId: string }) {
   async function selectVersions(
     copyVersion: "short" | "story" | "professional",
     editingVersion: "quick" | "social" | "full",
+    coverText?: string,
   ) {
     setSaving("selection");
     setError("");
@@ -98,6 +102,7 @@ export function ResultsView({ projectId }: { projectId: string }) {
         action: "select-versions",
         copyVersion,
         editingVersion,
+        coverText,
       });
       setData((current) =>
         current
@@ -107,6 +112,7 @@ export function ResultsView({ projectId }: { projectId: string }) {
                 ...current.project,
                 selectedCopyVersion: copyVersion,
                 selectedEditingVersion: editingVersion,
+                selectedCoverText: coverText ?? current.project.selectedCoverText,
               },
             }
           : current,
@@ -140,6 +146,29 @@ export function ResultsView({ projectId }: { projectId: string }) {
           ? regenerateError.message
           : "無法重新產生內容。",
       );
+      setSaving("");
+    }
+  }
+
+  async function adoptSegment(
+    scriptId: string,
+    segment: GeneratedContent["editingScripts"][number]["segments"][number],
+  ) {
+    setSaving(`segment-${scriptId}-${segment.startSeconds}`);
+    setError("");
+    try {
+      await patchProject({
+        action: "record-feedback",
+        feedbackType: "segment_adopted",
+        originalSuggestion: segment,
+        userAction: "採用片段",
+        finalChoice: segment,
+      });
+    } catch (segmentError) {
+      setError(
+        segmentError instanceof Error ? segmentError.message : "片段偏好儲存失敗。",
+      );
+    } finally {
       setSaving("");
     }
   }
@@ -191,7 +220,7 @@ export function ResultsView({ projectId }: { projectId: string }) {
         <div>
           <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#d3b176]/20 bg-[#d3b176]/[0.07] px-3 py-1.5 text-[11px] text-[#d3b176]">
             <Check className="size-3" />
-            已分析實際影片
+            本次使用：{data.project.styleProfileName}風格
           </span>
           <h1 className="text-3xl font-semibold tracking-[-0.045em] text-white sm:text-4xl">
             你的內容準備好了
@@ -245,6 +274,13 @@ export function ResultsView({ projectId }: { projectId: string }) {
             <BriefItem
               label="AI 理解後的任務摘要"
               value={data.project.aiTaskSummary || result.taskSummary}
+              highlight
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <BriefItem
+              label="本次如何套用風格"
+              value={result.styleApplicationSummary}
               highlight
             />
           </div>
@@ -359,6 +395,7 @@ export function ResultsView({ projectId }: { projectId: string }) {
                   <ScriptDetails
                     script={script}
                     editing={editing === key}
+                    onAdopt={(segment) => adoptSegment(script.id, segment)}
                     onChange={(nextScript) =>
                       setResult((current) =>
                         current
@@ -382,11 +419,37 @@ export function ResultsView({ projectId }: { projectId: string }) {
           <div className="grid gap-4 lg:grid-cols-3">
             <SuggestionCard icon={Pencil} title="標題">
               {result.titles.map((title, index) => (
-                <p key={title} className="mb-3 flex gap-3 text-xs leading-5 text-zinc-400">
+                <label key={index} className="mb-3 flex gap-3">
                   <span className="text-zinc-700">0{index + 1}</span>
-                  {title}
-                </p>
+                  <input
+                    value={title}
+                    onChange={(event) =>
+                      setResult((current) =>
+                        current
+                          ? {
+                              ...current,
+                              titles: current.titles.map((item, titleIndex) =>
+                                titleIndex === index ? event.target.value : item,
+                              ),
+                            }
+                          : current,
+                      )
+                    }
+                    className="min-w-0 flex-1 border-b border-white/[0.07] bg-transparent pb-2 text-xs leading-5 text-zinc-400 outline-none focus:border-[#deb5bb]/30"
+                  />
+                </label>
               ))}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={saving === "titles"}
+                onClick={() => saveChanges("titles")}
+                className="mt-2 w-full"
+              >
+                <Save className="size-3.5" />
+                儲存標題修改
+              </Button>
             </SuggestionCard>
             <SuggestionCard icon={Hash} title="Hashtag">
               <div className="flex flex-wrap gap-2">
@@ -399,9 +462,22 @@ export function ResultsView({ projectId }: { projectId: string }) {
             </SuggestionCard>
             <SuggestionCard icon={ImageIcon} title="封面文字">
               {result.coverTexts.map((text) => (
-                <p key={text} className="mb-2 rounded-xl border border-white/[0.06] p-3 text-sm text-zinc-300">
+                <button
+                  type="button"
+                  key={text}
+                  onClick={() => selectVersions(selectedCopy, selectedEditing, text)}
+                  className={cn(
+                    "mb-2 w-full rounded-xl border p-3 text-left text-sm",
+                    data.project.selectedCoverText === text
+                      ? "border-[#deb5bb]/30 bg-[#deb5bb]/10 text-white"
+                      : "border-white/[0.06] text-zinc-300",
+                  )}
+                >
                   {text}
-                </p>
+                  {data.project.selectedCoverText === text && (
+                    <span className="ml-2 text-[9px] text-[#d3b176]">已選擇</span>
+                  )}
+                </button>
               ))}
             </SuggestionCard>
           </div>
@@ -442,10 +518,12 @@ type EditingScript = GeneratedContent["editingScripts"][number];
 function ScriptDetails({
   script,
   editing,
+  onAdopt,
   onChange,
 }: {
   script: EditingScript;
   editing: boolean;
+  onAdopt: (segment: EditingScript["segments"][number]) => void;
   onChange: (script: EditingScript) => void;
 }) {
   if (editing) {
@@ -454,7 +532,44 @@ function ScriptDetails({
         <ScriptInput label="開頭鉤子" value={script.hook} onChange={(value) => onChange({ ...script, hook: value })} />
         {script.segments.map((segment, index) => (
           <div key={index} className="rounded-2xl border border-white/[0.07] p-4">
-            <p className="mb-3 text-xs text-[#d3b176]">段落 {index + 1}</p>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs text-[#d3b176]">段落 {index + 1}</p>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  aria-label="片段上移"
+                  disabled={index === 0}
+                  onClick={() => moveSegment(script, index, index - 1, onChange)}
+                  className="grid size-7 place-items-center rounded-lg text-zinc-600 hover:bg-white/5 hover:text-white disabled:opacity-20"
+                >
+                  <ArrowUp className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="片段下移"
+                  disabled={index === script.segments.length - 1}
+                  onClick={() => moveSegment(script, index, index + 1, onChange)}
+                  className="grid size-7 place-items-center rounded-lg text-zinc-600 hover:bg-white/5 hover:text-white disabled:opacity-20"
+                >
+                  <ArrowDown className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="拒絕並移除此片段"
+                  onClick={() =>
+                    onChange({
+                      ...script,
+                      segments: script.segments.filter(
+                        (_, segmentIndex) => segmentIndex !== index,
+                      ),
+                    })
+                  }
+                  className="grid size-7 place-items-center rounded-lg text-red-300/50 hover:bg-red-300/10 hover:text-red-300"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <ScriptInput label="開始秒數" type="number" value={String(segment.startSeconds)} onChange={(value) => updateSegment(script, index, { startSeconds: Number(value) }, onChange)} />
               <ScriptInput label="結束秒數" type="number" value={String(segment.endSeconds)} onChange={(value) => updateSegment(script, index, { endSeconds: Number(value) }, onChange)} />
@@ -464,9 +579,12 @@ function ScriptDetails({
             </div>
           </div>
         ))}
+        <ScriptInput label="剪輯節奏" value={script.editingPace} onChange={(value) => onChange({ ...script, editingPace: value })} />
+        <ScriptInput label="字幕樣式" value={script.subtitleStyle} onChange={(value) => onChange({ ...script, subtitleStyle: value })} />
         <ScriptInput label="背景音樂氣氛" value={script.backgroundMusicMood} onChange={(value) => onChange({ ...script, backgroundMusicMood: value })} />
         <ScriptInput label="結尾行動呼籲" value={script.callToAction} onChange={(value) => onChange({ ...script, callToAction: value })} />
         <ScriptInput label="封面標題" value={script.coverTitle} onChange={(value) => onChange({ ...script, coverTitle: value })} />
+        <ScriptInput label="Logo 位置" value={script.logoPosition} onChange={(value) => onChange({ ...script, logoPosition: value })} />
       </div>
     );
   }
@@ -485,9 +603,18 @@ function ScriptDetails({
           <div key={`${segment.startSeconds}-${index}`} className="rounded-2xl border border-white/[0.06] bg-black/15 p-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-xs text-[#d3b176]">段落 {index + 1}</span>
-              <span className="text-[11px] text-zinc-600">
-                {formatDuration(Math.round(segment.startSeconds))} — {formatDuration(Math.round(segment.endSeconds))}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-zinc-600">
+                  {formatDuration(Math.round(segment.startSeconds))} — {formatDuration(Math.round(segment.endSeconds))}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onAdopt(segment)}
+                  className="text-[10px] text-zinc-600 hover:text-[#d3b176]"
+                >
+                  採用此片段
+                </button>
+              </div>
             </div>
             <DetailRow label="畫面說明" value={segment.visualDescription} />
             <DetailRow label="字幕文字" value={segment.subtitle} />
@@ -496,8 +623,11 @@ function ScriptDetails({
         ))}
       </div>
       <DetailRow label="背景音樂氣氛" value={script.backgroundMusicMood} />
+      <DetailRow label="剪輯節奏" value={script.editingPace} />
+      <DetailRow label="字幕樣式" value={script.subtitleStyle} />
       <DetailRow label="結尾行動呼籲" value={script.callToAction} />
       <DetailRow label="封面標題" value={script.coverTitle} />
+      <DetailRow label="Logo 位置" value={script.logoPosition} />
     </div>
   );
 }
@@ -514,6 +644,19 @@ function updateSegment(
       segmentIndex === index ? { ...segment, ...values } : segment,
     ),
   });
+}
+
+function moveSegment(
+  script: EditingScript,
+  from: number,
+  to: number,
+  onChange: (script: EditingScript) => void,
+) {
+  const segments = [...script.segments];
+  const [segment] = segments.splice(from, 1);
+  if (!segment) return;
+  segments.splice(to, 0, segment);
+  onChange({ ...script, segments });
 }
 
 function ScriptInput({

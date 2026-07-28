@@ -3,6 +3,7 @@ import type {
   GeneratedContent,
   ProductionBrief,
 } from "@/types/analysis";
+import type { BrandStyleInput } from "@/types/style";
 
 export type StoredMedia = {
   bucket: string;
@@ -34,6 +35,7 @@ export type TranscriptionResult = {
 export type LlmAnalysisInput = {
   transcript: TranscriptionResult;
   brief: ProductionBrief;
+  brandStyle: BrandStyleInput;
   videoDurationSeconds: number;
   frames: VideoFrame[];
 };

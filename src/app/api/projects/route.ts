@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
-import { createAccessToken, setProjectAccessCookie } from "@/lib/jobs/access";
+import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { getProviderStatus } from "@/lib/providers/config";
 import { SupabaseMediaStorageProvider } from "@/lib/providers/supabase-storage";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -15,6 +15,10 @@ const allowedVideoTypes = new Set([
 ]);
 
 export async function POST(request: Request) {
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return NextResponse.json({ error: "請先登入。" }, { status: 401 });
+  }
   const providerStatus = getProviderStatus();
   if (!providerStatus.configured) {
     return NextResponse.json(
@@ -44,20 +48,36 @@ export async function POST(request: Request) {
   const storage = new SupabaseMediaStorageProvider();
   const projectId = crypto.randomUUID();
   const mediaId = crypto.randomUUID();
-  const { token, hash } = createAccessToken();
   const extension =
     path.extname(parsed.data.file.name).toLowerCase().replace(/[^.\w]/g, "") ||
     ".mp4";
-  const storagePath = `anonymous/${projectId}/source${extension}`;
+  const storagePath = `${user.id}/${projectId}/source${extension}`;
+
+  const { data: styleProfile } = await supabase
+    .from("brand_style_profiles")
+    .select("id,style_name")
+    .eq("id", parsed.data.styleProfileId)
+    .eq("user_id", user.id)
+    .single();
+  if (!styleProfile) {
+    return NextResponse.json(
+      { error: "請選擇有效的品牌風格。" },
+      { status: 400 },
+    );
+  }
+  const brief = {
+    ...parsed.data.brief,
+    style: styleProfile.style_name,
+  };
 
   const { error: projectError } = await supabase.from("projects").insert({
     id: projectId,
-    user_id: null,
+    user_id: user.id,
+    style_profile_id: styleProfile.id,
     name: parsed.data.file.name,
-    description: parsed.data.brief.originalRequest,
+    description: brief.originalRequest,
     status: "uploading",
-    brief: parsed.data.brief,
-    access_token_hash: hash,
+    brief,
   });
   if (projectError) {
     return NextResponse.json(
@@ -68,6 +88,7 @@ export async function POST(request: Request) {
 
   const { error: mediaError } = await supabase.from("media").insert({
     id: mediaId,
+    user_id: user.id,
     project_id: projectId,
     type: "video",
     file_name: parsed.data.file.name,
@@ -85,7 +106,7 @@ export async function POST(request: Request) {
 
   try {
     const upload = await storage.createUpload(storagePath);
-    const response = NextResponse.json(
+    return NextResponse.json(
       {
         projectId,
         upload: {
@@ -96,8 +117,6 @@ export async function POST(request: Request) {
       },
       { status: 201 },
     );
-    setProjectAccessCookie(response, projectId, token);
-    return response;
   } catch (error) {
     await supabase.from("projects").delete().eq("id", projectId);
     return NextResponse.json(

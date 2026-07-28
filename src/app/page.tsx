@@ -44,14 +44,13 @@ export default function Home() {
           <div className="mx-auto max-w-3xl text-center">
             <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[11px] text-zinc-400">
               <span className="size-1.5 rounded-full bg-[#d4b073]" />
-              從一份素材開始
+              會持續學會你的品牌風格
             </span>
             <h1 className="text-4xl font-semibold tracking-[-0.055em] text-white sm:text-6xl">
-              今天想製作什麼內容？
+              養成你的專屬 AI 剪片師
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-lg sm:leading-8">
-              上傳影片並告訴我們製作需求，AI
-              會根據實際內容整理逐字稿、文案與剪輯腳本。
+              建立並保存自己的品牌風格。每一次修改與選擇，都讓下一次內容更接近你。
             </p>
           </div>
 

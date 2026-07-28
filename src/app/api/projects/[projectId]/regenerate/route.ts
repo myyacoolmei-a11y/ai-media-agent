@@ -44,7 +44,7 @@ export async function POST(request: Request, context: RouteContext) {
     .from("projects")
     .update({ brief: nextBrief, status: "processing", error: null })
     .eq("id", projectId);
-  await createAnalysisTasks(projectId);
+  await createAnalysisTasks(projectId, access.user.id);
 
   after(() => processProject(projectId, { reuseTranscript: true }));
 

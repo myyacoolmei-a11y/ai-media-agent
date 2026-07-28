@@ -43,6 +43,7 @@ export class OpenAiLlmProvider implements LlmProvider {
         text: [
           `影片真實總長度：${input.videoDurationSeconds.toFixed(2)} 秒`,
           `使用者需求：${JSON.stringify(input.brief, null, 2)}`,
+          `本次指定 Brand Style Profile：${JSON.stringify(input.brandStyle, null, 2)}`,
           "真實逐字稿（含原片時間點）：",
           transcriptWithTimestamps,
           "",
@@ -74,11 +75,14 @@ export class OpenAiLlmProvider implements LlmProvider {
           content: [
             "你是繁體中文媒體內容企劃與剪輯腳本編輯。",
             "只能根據提供的真實逐字稿、原片時間點、畫面截圖與使用者需求回答。",
+            "Brand Style Profile 是本次文案、敘事、剪輯節奏、字幕、色彩、音樂、CTA、Logo、片頭與片尾的最高優先風格規則。",
+            "不得採用 Profile 中 forbidden_tone 或 negative_examples 描述的風格。",
             "不得捏造人物、產品、事件、畫面或原片中不存在的說法。",
             "每個剪輯段落的 startSeconds/endSeconds 必須落在原片總長度內，並引用真實可用片段。",
             "若素材不足以支撐指定版本，將 insufficientMaterial 設為 true，明確填寫 insufficiencyReason，寧可減少 segments 也不可捏造。",
             "三版文案 id 必須依序為 short、story、professional；三版剪輯 id 必須依序為 quick、social、full。",
             "taskSummary 要具體說明你如何理解使用者本次任務。",
+            "styleApplicationSummary 要具體解釋本次內容如何套用指定 Brand Style Profile。",
             "所有輸出使用繁體中文，Hashtag 需包含 #。",
           ].join("\n"),
         },

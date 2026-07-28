@@ -12,6 +12,7 @@ export const productionBriefSchema = z.object({
 export type ProductionBrief = z.infer<typeof productionBriefSchema>;
 
 export const uploadRequestSchema = z.object({
+  styleProfileId: z.string().uuid(),
   brief: productionBriefSchema,
   file: z.object({
     name: z.string().min(1).max(255),
@@ -52,6 +53,9 @@ export const editingScriptSchema = z.object({
   hook: z.string(),
   segments: z.array(editingSegmentSchema),
   backgroundMusicMood: z.string(),
+  editingPace: z.string(),
+  subtitleStyle: z.string(),
+  logoPosition: z.string(),
   callToAction: z.string(),
   coverTitle: z.string(),
   insufficientMaterial: z.boolean(),
@@ -60,6 +64,7 @@ export const editingScriptSchema = z.object({
 
 export const generatedContentSchema = z.object({
   taskSummary: z.string(),
+  styleApplicationSummary: z.string(),
   summary: z.array(z.string()).min(1).max(6),
   copyVariants: z
     .array(
@@ -83,10 +88,13 @@ export type AnalysisProjectResponse = {
     id: string;
     name: string;
     status: "draft" | "uploading" | "processing" | "completed" | "failed";
+    styleProfileId: string;
+    styleProfileName: string;
     brief: ProductionBrief;
     aiTaskSummary: string | null;
     selectedCopyVersion: "short" | "story" | "professional" | null;
     selectedEditingVersion: "quick" | "social" | "full" | null;
+    selectedCoverText: string | null;
     error: string | null;
   };
   media: {

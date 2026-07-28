@@ -25,8 +25,34 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
+  let userId: string | undefined;
   if (supabaseConfig.isConfigured) {
-    await supabase.auth.getClaims();
+    const { data } = await supabase.auth.getClaims();
+    userId = data?.claims?.sub;
+  }
+
+  const protectedPath =
+    request.nextUrl.pathname.startsWith("/projects") ||
+    request.nextUrl.pathname.startsWith("/styles");
+  const authPath =
+    request.nextUrl.pathname === "/login" ||
+    request.nextUrl.pathname === "/signup";
+
+  if (protectedPath && !userId) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set(
+      "next",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    );
+    return NextResponse.redirect(url);
+  }
+
+  if (authPath && userId) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/projects/new";
+    url.search = "";
+    return NextResponse.redirect(url);
   }
 
   return response;
