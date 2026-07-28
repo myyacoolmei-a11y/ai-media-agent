@@ -1,4 +1,4 @@
-import { ArrowUpRight, Plus } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -13,22 +13,15 @@ export function SiteHeader({ compact = false }: { compact?: boolean }) {
           <Logo />
         </Link>
         <nav className="flex items-center gap-1">
-          {!compact && (
-            <a
-              href="#workflow"
-              className="hidden rounded-full px-4 py-2 text-sm text-zinc-500 transition hover:text-white sm:block"
-            >
-              工作流程
-            </a>
-          )}
-          <span className="mx-2 hidden h-4 w-px bg-white/10 sm:block" />
           <Link
             href="/projects/new"
             className={cn(buttonVariants({ size: "sm" }), "group")}
           >
             <Plus className="size-3.5" />
-            新專案
-            <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            開始製作
+            {!compact && (
+              <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+            )}
           </Link>
         </nav>
       </div>

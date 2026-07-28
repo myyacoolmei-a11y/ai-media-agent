@@ -69,9 +69,18 @@ export interface CopyVariant {
   content: string;
 }
 
+export interface EditingDirection {
+  id: "quick" | "social" | "full";
+  label: string;
+  duration: string;
+  description: string;
+  scenes: string[];
+}
+
 export interface AiResultContent {
   summary: string[];
   copyVariants: CopyVariant[];
+  editingDirections: EditingDirection[];
   titles: string[];
   hashtags: string[];
   coverTexts: string[];
