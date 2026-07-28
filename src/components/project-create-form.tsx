@@ -16,8 +16,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { DEMO_PROJECT_ID } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/client";
 import { cn, formatFileSize } from "@/lib/utils";
+import type { ProductionBrief } from "@/types/analysis";
 
 type MediaChoice = "video" | "photos" | "audio";
 
@@ -69,8 +70,14 @@ const mediaSettings: Record<
 
 export function ProjectCreateForm({
   initialType = "video",
+  providerStatus,
 }: {
   initialType?: MediaChoice;
+  providerStatus: {
+    configured: boolean;
+    missing: readonly string[];
+    message: string | null;
+  };
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,12 +85,18 @@ export function ProjectCreateForm({
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [step, setStep] = useState(0);
-  const [mediaType, setMediaType] = useState<MediaChoice>(initialType);
+  const [mediaType, setMediaType] = useState<MediaChoice>(
+    initialType === "video" ? initialType : "video",
+  );
   const [files, setFiles] = useState<File[]>([]);
   const [purpose, setPurpose] = useState("");
   const [customPurpose, setCustomPurpose] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [style, setStyle] = useState("");
+  const [originalRequest, setOriginalRequest] = useState("");
+  const [targetDuration, setTargetDuration] =
+    useState<ProductionBrief["targetDuration"]>("由 AI 建議");
+  const [additionalNotes, setAdditionalNotes] = useState("");
   const [error, setError] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -106,6 +119,10 @@ export function ProjectCreateForm({
   const setting = mediaSettings[mediaType];
 
   function selectMediaType(type: MediaChoice) {
+    if (type !== "video") {
+      setError("照片與語音的真實分析將在下一階段提供，本階段請上傳影片。");
+      return;
+    }
     setMediaType(type);
     setFiles([]);
     setError("");
@@ -155,10 +172,10 @@ export function ProjectCreateForm({
   }
 
   function canContinue() {
-    if (step === 0) return files.length > 0;
+    if (step === 0) return files.length > 0 && originalRequest.trim().length >= 5;
     if (step === 1) return purpose && (purpose !== "自訂" || customPurpose.trim());
     if (step === 2) return selectedPlatforms.length > 0;
-    if (step === 3) return Boolean(style);
+    if (step === 3) return Boolean(style && targetDuration);
     return true;
   }
 
@@ -166,7 +183,7 @@ export function ProjectCreateForm({
     if (!canContinue()) {
       setError(
         step === 0
-          ? "請先加入素材"
+          ? "請先加入影片，並輸入至少 5 個字的製作需求"
           : step === 2
             ? "請至少選擇一個發布平台"
             : "請先完成這個選擇",
@@ -178,13 +195,87 @@ export function ProjectCreateForm({
   }
 
   async function submit() {
+    if (!providerStatus.configured || !files[0]) {
+      setError(
+        providerStatus.message ?? "請先加入要分析的影片。",
+      );
+      return;
+    }
+
     setIsSubmitting(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
-    router.push(`/projects/${DEMO_PROJECT_ID}/processing`);
+    setError("");
+    try {
+      const brief: ProductionBrief = {
+        originalRequest: originalRequest.trim(),
+        purpose: purpose === "自訂" ? customPurpose.trim() : purpose,
+        platforms: selectedPlatforms,
+        style,
+        targetDuration,
+        additionalNotes: additionalNotes.trim(),
+      };
+      const createResponse = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brief,
+          file: {
+            name: files[0].name,
+            type: files[0].type,
+            size: files[0].size,
+          },
+        }),
+      });
+      const created = (await createResponse.json()) as {
+        projectId?: string;
+        upload?: { path: string; token: string };
+        error?: string;
+      };
+      if (!createResponse.ok || !created.projectId || !created.upload) {
+        throw new Error(created.error || "無法建立分析工作。");
+      }
+
+      const supabase = createClient();
+      const { error: uploadError } = await supabase.storage
+        .from("project-media")
+        .uploadToSignedUrl(
+          created.upload.path,
+          created.upload.token,
+          files[0],
+          { contentType: files[0].type },
+        );
+      if (uploadError) {
+        throw new Error(`影片上傳失敗：${uploadError.message}`);
+      }
+
+      const completeResponse = await fetch(
+        `/api/projects/${created.projectId}/complete`,
+        { method: "POST" },
+      );
+      const completed = (await completeResponse.json()) as { error?: string };
+      if (!completeResponse.ok) {
+        throw new Error(completed.error || "無法開始分析工作。");
+      }
+      router.push(`/projects/${created.projectId}/processing`);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error ? submitError.message : "影片上傳失敗。",
+      );
+      setIsSubmitting(false);
+    }
   }
 
   return (
     <div>
+      {!providerStatus.configured && (
+        <div className="mb-7 rounded-2xl border border-red-400/25 bg-red-400/[0.07] p-4">
+          <p className="text-sm font-medium text-red-200">
+            尚未設定 AI API，因此無法進行真實分析。
+          </p>
+          <p className="mt-2 text-xs leading-5 text-red-300/60">
+            缺少：{providerStatus.missing.join("、")}
+          </p>
+        </div>
+      )}
       <div className="mb-9">
         <div className="mb-4 flex items-center justify-between text-[11px] text-zinc-600">
           <span>
@@ -237,6 +328,9 @@ export function ProjectCreateForm({
                 >
                   <Icon className="size-5" strokeWidth={1.5} />
                   {label}
+                  {type !== "video" && (
+                    <span className="text-[9px] text-zinc-700">下一階段</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -346,6 +440,18 @@ export function ProjectCreateForm({
                 )}
               </div>
             )}
+            <label className="mt-5 block">
+              <span className="mb-2 block text-sm font-medium text-zinc-300">
+                你希望這支影片幫你達成什麼？
+              </span>
+              <textarea
+                value={originalRequest}
+                onChange={(event) => setOriginalRequest(event.target.value)}
+                rows={3}
+                placeholder="例如：整理新品特色，做成一支適合 Instagram、能吸引顧客詢問的影片"
+                className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-white outline-none placeholder:text-zinc-700 focus:border-[#deb5bb]/40"
+              />
+            </label>
           </section>
         )}
 
@@ -424,6 +530,30 @@ export function ProjectCreateForm({
               description="先選一種主要風格，之後仍可自行修改。"
             />
             <ChoiceGrid options={styles} value={style} onChange={setStyle} />
+            <div className="mt-7">
+              <p className="mb-3 text-sm font-medium text-zinc-300">
+                希望的影片長度
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(["15 秒", "30 秒", "60 秒", "由 AI 建議"] as const).map(
+                  (duration) => (
+                    <button
+                      key={duration}
+                      type="button"
+                      onClick={() => setTargetDuration(duration)}
+                      className={cn(
+                        "rounded-xl border px-3 py-3 text-xs transition",
+                        targetDuration === duration
+                          ? "border-[#deb5bb]/35 bg-[#deb5bb]/10 text-white"
+                          : "border-white/[0.07] text-zinc-500 hover:text-white",
+                      )}
+                    >
+                      {duration}
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
           </section>
         )}
 
@@ -441,15 +571,29 @@ export function ProjectCreateForm({
               />
               <SummaryRow label="平台" value={selectedPlatforms.join("、")} />
               <SummaryRow label="風格" value={style} />
+              <SummaryRow label="影片長度" value={targetDuration} />
+              <SummaryRow label="製作需求" value={originalRequest} />
             </div>
+            <label className="mt-5 block">
+              <span className="mb-2 block text-xs text-zinc-500">
+                還有其他想補充的嗎？（選填）
+              </span>
+              <textarea
+                value={additionalNotes}
+                onChange={(event) => setAdditionalNotes(event.target.value)}
+                rows={3}
+                placeholder="例如：不要使用過度誇張的語氣，結尾要引導私訊"
+                className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-white outline-none placeholder:text-zinc-700 focus:border-[#deb5bb]/40"
+              />
+            </label>
             <Button
               type="button"
               size="lg"
               onClick={submit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !providerStatus.configured}
               className="mt-6 w-full"
             >
-              {isSubmitting ? "準備中…" : "讓 AI 幫我完成"}
+              {isSubmitting ? "正在上傳影片…" : "讓 AI 幫我完成"}
               {!isSubmitting && <ArrowRight className="size-4" />}
             </Button>
           </section>

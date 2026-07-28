@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { ProjectCreateForm } from "@/components/project-create-form";
+import { getProviderStatus } from "@/lib/providers/config";
 
 export const metadata: Metadata = {
   title: "開始製作內容",
@@ -16,6 +17,7 @@ export default async function NewProjectPage({
   const { type } = await searchParams;
   const initialType =
     type === "photos" || type === "audio" || type === "video" ? type : "video";
+  const providerStatus = getProviderStatus();
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -28,7 +30,10 @@ export default async function NewProjectPage({
         </p>
       </div>
       <div className="rounded-[28px] border border-white/[0.08] bg-white/[0.02] p-6 sm:p-8">
-        <ProjectCreateForm initialType={initialType} />
+        <ProjectCreateForm
+          initialType={initialType}
+          providerStatus={providerStatus}
+        />
       </div>
     </div>
   );

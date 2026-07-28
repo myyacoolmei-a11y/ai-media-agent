@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   title: "內容製作中",
 };
 
-export default function ProcessingPage() {
-  return <ProcessingView />;
+type ProcessingPageProps = {
+  params: Promise<{ projectId: string }>;
+};
+
+export default async function ProcessingPage({ params }: ProcessingPageProps) {
+  const { projectId } = await params;
+  return <ProcessingView projectId={projectId} />;
 }

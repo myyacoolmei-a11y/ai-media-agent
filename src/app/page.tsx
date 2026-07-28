@@ -2,6 +2,7 @@ import { ArrowRight, Images, Mic2, ShieldCheck, Video } from "lucide-react";
 import Link from "next/link";
 
 import { SiteHeader } from "@/components/site-header";
+import { cn } from "@/lib/utils";
 
 const uploadOptions = [
   {
@@ -11,22 +12,25 @@ const uploadOptions = [
     description: "從手機或電腦選擇影片",
     detail: "MP4、MOV、WebM",
     accent: "from-[#e2b8bd]/18 to-transparent",
+    available: true,
   },
   {
     type: "photos",
     icon: Images,
     title: "上傳照片",
     description: "一次選擇多張照片",
-    detail: "JPG、PNG、WebP",
+    detail: "下一階段開放",
     accent: "from-[#c9ad7f]/16 to-transparent",
+    available: false,
   },
   {
     type: "audio",
     icon: Mic2,
     title: "錄製或上傳語音",
     description: "直接說，或選擇音訊檔",
-    detail: "手機錄音、MP3、WAV",
+    detail: "下一階段開放",
     accent: "from-[#b6a7bd]/16 to-transparent",
+    available: false,
   },
 ];
 
@@ -46,18 +50,15 @@ export default function Home() {
               今天想製作什麼內容？
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-lg sm:leading-8">
-              上傳影片、照片或語音，AI
-              幫你整理內容、產生文案與規劃剪輯版本。
+              上傳影片並告訴我們製作需求，AI
+              會根據實際內容整理逐字稿、文案與剪輯腳本。
             </p>
           </div>
 
           <div className="mx-auto mt-12 grid max-w-5xl gap-4 sm:mt-16 sm:grid-cols-3">
-            {uploadOptions.map((option) => (
-              <Link
-                key={option.type}
-                href={`/projects/new?type=${option.type}`}
-                className="group relative min-h-56 overflow-hidden rounded-[28px] border border-white/[0.09] bg-[#111011] p-6 transition duration-300 hover:-translate-y-1 hover:border-[#e2b8bd]/30 hover:bg-[#151214] sm:min-h-72 sm:p-7"
-              >
+            {uploadOptions.map((option) => {
+              const content = (
+                <>
                 <div
                   className={`absolute inset-0 bg-gradient-to-br ${option.accent} opacity-70 transition group-hover:opacity-100`}
                 />
@@ -71,7 +72,11 @@ export default function Home() {
                         {option.title}
                       </h2>
                       <span className="grid size-9 shrink-0 place-items-center rounded-full border border-white/10 text-zinc-500 transition group-hover:border-[#e2b8bd]/30 group-hover:bg-[#e2b8bd] group-hover:text-black">
-                        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                        {option.available ? (
+                          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                        ) : (
+                          <span className="size-1.5 rounded-full bg-zinc-700" />
+                        )}
                       </span>
                     </div>
                     <p className="mt-3 text-sm text-zinc-400">
@@ -82,22 +87,36 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
-              </Link>
-            ))}
+                </>
+              );
+              const className = cn(
+                "group relative min-h-56 overflow-hidden rounded-[28px] border border-white/[0.09] bg-[#111011] p-6 transition duration-300 sm:min-h-72 sm:p-7",
+                option.available
+                  ? "hover:-translate-y-1 hover:border-[#e2b8bd]/30 hover:bg-[#151214]"
+                  : "cursor-not-allowed opacity-50",
+              );
+
+              return option.available ? (
+                <Link
+                  key={option.type}
+                  href={`/projects/new?type=${option.type}`}
+                  className={className}
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div key={option.type} className={className}>
+                  {content}
+                </div>
+              );
+            })}
           </div>
 
-          <div className="mx-auto mt-8 flex max-w-5xl flex-col items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-center sm:flex-row sm:text-left">
+          <div className="mx-auto mt-8 flex max-w-5xl items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-center">
             <p className="flex items-center gap-2 text-xs text-zinc-500">
               <ShieldCheck className="size-4 text-[#c9ad7f]" />
-              素材只用於本次內容製作
+              影片會安全儲存，結果只來自本次素材與需求
             </p>
-            <Link
-              href="/projects/demo-project/results"
-              className="text-xs text-zinc-500 transition hover:text-white"
-            >
-              先看看完成範例
-              <ArrowRight className="ml-1.5 inline size-3" />
-            </Link>
           </div>
         </section>
       </main>

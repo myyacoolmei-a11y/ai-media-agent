@@ -4,11 +4,14 @@ AI Media Agent 是一個從媒體素材出發的 AI 內容工作流。第一階�
 
 ## MVP routes
 
-- `/` — 產品首頁與 Pipeline 說明
+- `/` — 影片內容製作入口
 - `/projects/new` — 建立專案與影片上傳
-- `/projects/[projectId]/processing` — AI 任務進度
+- `/projects/[projectId]/processing` — 真實處理工作進度
 - `/projects/[projectId]/results` — 完整內容輸出
-- `POST /api/ai/tasks` — 未來 Queue/Worker 的 Mock 邊界
+- `POST /api/projects` — 建立工作與 Supabase signed upload
+- `POST /api/projects/[projectId]/complete` — 驗證上傳並啟動處理
+- `GET/PATCH /api/projects/[projectId]` — 讀取與儲存結果
+- `POST /api/projects/[projectId]/regenerate` — 使用原素材重新生成
 
 ## Architecture
 
@@ -23,7 +26,20 @@ Video upload
   → AiResult
 ```
 
-UI、AI orchestration 與 provider adapter 分離。`src/lib/ai/workflow.ts` 定義工作流與 provider contract，目前使用 `src/lib/mock-data.ts`，未呼叫外部 AI API。未來可把各 stage 接到 queue worker，不需更動前端資料模型。
+影片會直接上傳至 private Supabase Storage。Railway 上的 Next.js worker
+使用 FFmpeg 擷取音訊與代表畫面，透過 OpenAI 語音辨識取得含時間點逐字稿，
+再把逐字稿、畫面、原片長度與完整製作需求送給 LLM。結構化結果與每次重新生成版本
+都寫入 Supabase。
+
+Provider contracts 位於 `src/lib/providers/types.ts`：
+
+- `MediaStorageProvider`
+- `VideoProcessingProvider`
+- `TranscriptionProvider`
+- `LlmProvider`
+
+目前提供 Supabase Storage、FFmpeg 與 OpenAI 實作；未設定必要環境變數時，
+介面會阻止上傳並明確顯示設定缺失，不會回退到假資料。
 
 ## Stack
 
@@ -40,4 +56,6 @@ npm install
 npm run dev
 ```
 
-未設定 Supabase 環境變數時，產品展示與 Mock Workflow 仍可執行。資料庫 migration 位於 `supabase/migrations/202607270001_initial_schema.sql`，包含六個 MVP domain tables、RLS policies 與 private media bucket。
+部署前必須依序套用 `supabase/migrations` 內的 migrations，並設定
+`.env.example` 列出的必要環境變數。FFmpeg 與 FFprobe 預設由 npm 套件提供，
+也可用環境變數指定 Railway image 內的 binary。
