@@ -26,6 +26,7 @@ export async function serializePublicContent(
     slug: content.slug,
     summary: content.summary,
     content: content.content,
+    videoUrl: content.video_url,
     coverImage: cover?.signed_url ?? null,
     category: content.category,
     contentType: content.content_type,

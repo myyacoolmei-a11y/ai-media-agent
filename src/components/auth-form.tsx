@@ -33,7 +33,13 @@ const content = {
   },
 } satisfies Record<AuthMode, Record<string, string>>;
 
-export function AuthForm({ mode }: { mode: AuthMode }) {
+export function AuthForm({
+  mode,
+  defaultNext = "/dashboard",
+}: {
+  mode: AuthMode;
+  defaultNext?: string;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -69,7 +75,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         });
         if (authError) throw authError;
         const next = searchParams.get("next");
-        router.replace(next?.startsWith("/") ? next : "/dashboard");
+        router.replace(next?.startsWith("/") ? next : defaultNext);
         router.refresh();
       } else if (mode === "signup") {
         const { data, error: authError } = await supabase.auth.signUp({

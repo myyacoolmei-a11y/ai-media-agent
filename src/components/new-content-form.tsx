@@ -53,6 +53,7 @@ export function NewContentForm() {
         slug: uniqueSlug,
         summary: "",
         content: "",
+        videoUrl: "",
         category: "未分類",
         contentType: type,
         styleProfileId: null,

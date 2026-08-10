@@ -19,6 +19,12 @@ Brand Style Profile；每個影片專案都必須指定一套風格，AI 會優�
 - `/dashboard/contents/new` — 建立影片、圖文或文章內容
 - `/dashboard/contents/[contentId]/edit` — 統一內容編輯器
 - `/dashboard/contents/[contentId]/preview` — 發布前預覽
+- `/admin/login` — 最小可用後台登入
+- `/admin` — 文章列表
+- `/admin/new` — 新增文章
+- `/admin/[contentId]/edit` — 文章編輯與發布
+- `/` — 已發布文章列表
+- `/articles/[slug]` — 已發布單篇文章
 - `POST /api/projects` — 建立工作與 Supabase signed upload
 - `POST /api/projects/[projectId]/complete` — 驗證上傳並啟動處理
 - `GET/PATCH /api/projects/[projectId]` — 讀取與儲存結果

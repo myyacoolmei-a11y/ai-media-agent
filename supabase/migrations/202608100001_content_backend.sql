@@ -27,6 +27,7 @@ create table public.content_items (
     check (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
   summary text not null default '',
   content text not null default '',
+  video_url text,
   category text not null default '未分類',
   content_type public.content_type not null,
   status public.content_status not null default 'draft',

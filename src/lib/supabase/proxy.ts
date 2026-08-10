@@ -32,16 +32,21 @@ export async function updateSession(request: NextRequest) {
   }
 
   const protectedPath =
+    (request.nextUrl.pathname.startsWith("/admin") &&
+      request.nextUrl.pathname !== "/admin/login") ||
     request.nextUrl.pathname.startsWith("/dashboard") ||
     request.nextUrl.pathname.startsWith("/projects") ||
     request.nextUrl.pathname.startsWith("/styles");
   const authPath =
+    request.nextUrl.pathname === "/admin/login" ||
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/signup";
 
   if (protectedPath && !userId) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = request.nextUrl.pathname.startsWith("/admin")
+      ? "/admin/login"
+      : "/login";
     url.searchParams.set(
       "next",
       `${request.nextUrl.pathname}${request.nextUrl.search}`,
@@ -51,7 +56,8 @@ export async function updateSession(request: NextRequest) {
 
   if (authPath && userId) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname =
+      request.nextUrl.pathname === "/admin/login" ? "/admin" : "/dashboard";
     url.search = "";
     return NextResponse.redirect(url);
   }

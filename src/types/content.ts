@@ -26,6 +26,7 @@ export const contentInputSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug 格式不正確"),
   summary: z.string().trim().max(1000),
   content: z.string().max(100_000),
+  videoUrl: z.union([z.string().url(), z.literal("")]),
   category: z.string().trim().min(1).max(100),
   contentType: contentTypeSchema,
   styleProfileId: z.string().uuid().nullable(),
@@ -69,6 +70,7 @@ export type ContentItem = {
   slug: string;
   summary: string;
   content: string;
+  video_url: string | null;
   category: string;
   content_type: ContentType;
   status: ContentStatus;
@@ -85,6 +87,7 @@ export type PublicContentItem = {
   slug: string;
   summary: string;
   content: string;
+  videoUrl: string | null;
   coverImage: string | null;
   category: string;
   contentType: ContentType;

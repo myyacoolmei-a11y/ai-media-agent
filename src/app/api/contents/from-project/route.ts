@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       slug: `content-${id.slice(0, 8)}`,
       summary: generated.data.summary.join(" "),
       content: preferred?.content ?? "",
+      video_url: null,
       category: access.project.brief?.purpose || "未分類",
       content_type: "video",
       status: "draft",

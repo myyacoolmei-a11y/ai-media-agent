@@ -72,6 +72,7 @@ export async function POST(request: Request) {
       slug: payload.data.slug,
       summary: payload.data.summary,
       content: payload.data.content,
+      video_url: payload.data.videoUrl || null,
       category: payload.data.category,
       content_type: payload.data.contentType,
       style_profile_id: payload.data.styleProfileId,

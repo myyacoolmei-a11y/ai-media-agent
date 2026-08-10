@@ -59,6 +59,7 @@ export function ContentEditor({
         slug: content.slug,
         summary: content.summary,
         content: content.content,
+        videoUrl: content.video_url ?? "",
         category: content.category,
         contentType: content.content_type,
         styleProfileId: content.style_profile_id,
