@@ -46,3 +46,37 @@ a {
 .animate-float {
   animation: float 5s ease-in-out infinite;
 }
+
+.editor-input {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 0.875rem 1rem;
+  color: white;
+  outline: none;
+}
+
+.editor-input:focus,
+.setting-input:focus {
+  border-color: rgba(222, 181, 187, 0.4);
+}
+
+.setting-label {
+  margin-bottom: 0.5rem;
+  display: block;
+  font-size: 0.6875rem;
+  color: #71717a;
+}
+
+.setting-input {
+  height: 2.75rem;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: #111;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  color: #e4e4e7;
+  outline: none;
+}

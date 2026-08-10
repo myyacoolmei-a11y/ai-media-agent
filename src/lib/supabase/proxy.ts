@@ -32,6 +32,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   const protectedPath =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
     request.nextUrl.pathname.startsWith("/projects") ||
     request.nextUrl.pathname.startsWith("/styles");
   const authPath =
@@ -50,7 +51,7 @@ export async function updateSession(request: NextRequest) {
 
   if (authPath && userId) {
     const url = request.nextUrl.clone();
-    url.pathname = "/projects/new";
+    url.pathname = "/dashboard";
     url.search = "";
     return NextResponse.redirect(url);
   }

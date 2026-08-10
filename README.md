@@ -14,10 +14,21 @@ Brand Style Profile；每個影片專案都必須指定一套風格，AI 會優�
 - `/forgot-password`、`/reset-password` — 密碼重設
 - `/styles` — 多風格管理與 AI 學習紀錄
 - `/styles/new` — 建立 Brand Style Profile
+- `/dashboard` — 內容製作後台總覽
+- `/dashboard/contents` — 草稿、預覽與已發布內容管理
+- `/dashboard/contents/new` — 建立影片、圖文或文章內容
+- `/dashboard/contents/[contentId]/edit` — 統一內容編輯器
+- `/dashboard/contents/[contentId]/preview` — 發布前預覽
 - `POST /api/projects` — 建立工作與 Supabase signed upload
 - `POST /api/projects/[projectId]/complete` — 驗證上傳並啟動處理
 - `GET/PATCH /api/projects/[projectId]` — 讀取與儲存結果
 - `POST /api/projects/[projectId]/regenerate` — 使用原素材重新生成
+- `GET/POST /api/contents` — 登入使用者的內容列表與建立草稿
+- `GET/PATCH /api/contents/[contentId]` — 內容讀取與編輯
+- `POST /api/contents/[contentId]/status` — 草稿／預覽／發布
+- `POST /api/contents/[contentId]/assets` — 圖片與影片 signed upload
+- `GET /api/public/contents` — 已發布內容公開列表
+- `GET /api/public/contents/[slug]` — 已發布內容公開明細
 
 ## Architecture
 
@@ -36,6 +47,15 @@ Video upload
 使用 FFmpeg 擷取音訊與代表畫面，透過 OpenAI 語音辨識取得含時間點逐字稿，
 再把逐字稿、畫面、原片長度與完整製作需求送給 LLM。結構化結果與每次重新生成版本
 都寫入 Supabase。
+
+`projects` 與 `content_items` 負責不同生命週期：
+
+- `projects`：AI 製作工作、逐字稿、分析任務與原始 AI 結果
+- `content_items`：可人工編輯並提供媒體前台使用的正式內容
+
+影片、圖文與文章都進入相同的 `draft → preview → published` 流程。公開 API
+只查詢已發布且 `published_at <= now()` 的內容，媒體仍保存在 private Storage，
+由 API 產生短期 signed URL。
 
 Provider contracts 位於 `src/lib/providers/types.ts`：
 
@@ -86,3 +106,9 @@ https://<your-domain>/auth/confirm
 ```
 
 Email confirmation 可在 Supabase Auth 設定中控制；正式上線建議啟用。
+
+內容後台需要再套用：
+
+```text
+supabase/migrations/202608100001_content_backend.sql
+```

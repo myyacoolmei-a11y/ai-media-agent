@@ -1,6 +1,6 @@
 "use client";
 
-import { LogIn, LogOut, Palette } from "lucide-react";
+import { LayoutDashboard, LogIn, LogOut, Palette } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -42,6 +42,13 @@ export function AccountMenu() {
 
   return (
     <>
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-2 rounded-full px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-white"
+      >
+        <LayoutDashboard className="size-3.5" />
+        <span className="hidden sm:inline">後台</span>
+      </Link>
       <Link
         href="/styles"
         className="flex items-center gap-2 rounded-full px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-white"

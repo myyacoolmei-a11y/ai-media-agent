@@ -186,6 +186,26 @@ export function ResultsView({ projectId }: { projectId: string }) {
     window.setTimeout(() => setCopied(false), 1200);
   }
 
+  async function createContentDraft() {
+    setSaving("import");
+    setError("");
+    const response = await fetch("/api/contents/from-project", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId }),
+    });
+    const payload = (await response.json()) as {
+      content?: { id: string };
+      error?: string;
+    };
+    if (!response.ok || !payload.content) {
+      setError(payload.error || "無法建立內容草稿。");
+      setSaving("");
+      return;
+    }
+    router.push(`/dashboard/contents/${payload.content.id}/edit`);
+  }
+
   if (!data && !error) {
     return (
       <div className="grid min-h-96 place-items-center text-zinc-500">
@@ -229,10 +249,21 @@ export function ResultsView({ projectId }: { projectId: string }) {
             結果來自本次上傳影片、逐字稿與製作需求。
           </p>
         </div>
-        <Button variant="secondary" onClick={copySelected}>
-          {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-          {copied ? "已複製" : "複製選定內容"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={copySelected}>
+            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+            {copied ? "已複製" : "複製選定內容"}
+          </Button>
+          <Button
+            onClick={createContentDraft}
+            disabled={saving === "import"}
+          >
+            {saving === "import" && (
+              <LoaderCircle className="size-4 animate-spin" />
+            )}
+            建立內容草稿
+          </Button>
+        </div>
       </header>
 
       {error && (

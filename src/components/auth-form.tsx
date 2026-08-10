@@ -69,7 +69,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         });
         if (authError) throw authError;
         const next = searchParams.get("next");
-        router.replace(next?.startsWith("/") ? next : "/projects/new");
+        router.replace(next?.startsWith("/") ? next : "/dashboard");
         router.refresh();
       } else if (mode === "signup") {
         const { data, error: authError } = await supabase.auth.signUp({
@@ -99,7 +99,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         const { error: authError } = await supabase.auth.updateUser({ password });
         if (authError) throw authError;
         setMessage("密碼已更新，正在返回內容製作頁。");
-        window.setTimeout(() => router.replace("/projects/new"), 800);
+        window.setTimeout(() => router.replace("/dashboard"), 800);
       }
     } catch (authError) {
       setError(
