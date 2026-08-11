@@ -26,6 +26,14 @@ const emptyStyle: BrandStyleInput = {
   outro_template: "",
   reference_content: [],
   negative_examples: "",
+  brand_name: "",
+  article_tone: "",
+  text_style: "",
+  forbidden_expressions: "",
+  preferred_video_length: "",
+  preferred_image_ratio: "1:1",
+  image_visual_style: "",
+  social_copy_style: "",
 };
 
 const fields: Array<{
@@ -35,6 +43,7 @@ const fields: Array<{
   optional?: boolean;
 }> = [
   { key: "style_name", label: "風格名稱", placeholder: "例如：個人品牌" },
+  { key: "brand_name", label: "品牌名稱", placeholder: "例如：我的媒體品牌" },
   {
     key: "brand_description",
     label: "品牌描述",
@@ -49,6 +58,24 @@ const fields: Array<{
     key: "brand_personality",
     label: "品牌個性",
     placeholder: "例如：真誠、直接、有洞察力、不說教",
+  },
+  {
+    key: "article_tone",
+    label: "文章語氣",
+    placeholder: "例如：清楚、可信、像專業編輯但不說教",
+    optional: true,
+  },
+  {
+    key: "text_style",
+    label: "常用文字風格",
+    placeholder: "例如：短句、少用驚嘆號、段落開頭先說結論",
+    optional: true,
+  },
+  {
+    key: "forbidden_expressions",
+    label: "不喜歡的表達方式",
+    placeholder: "例如：震驚、必看、保證有效、過度促銷",
+    optional: true,
   },
   {
     key: "preferred_tone",
@@ -77,9 +104,33 @@ const fields: Array<{
     placeholder: "例如：前 5 秒快速，之後保留自然停頓",
   },
   {
+    key: "preferred_video_length",
+    label: "影片長度偏好",
+    placeholder: "例如：社群影片以 30–60 秒為主",
+    optional: true,
+  },
+  {
     key: "preferred_subtitle_style",
     label: "字幕樣式",
     placeholder: "例如：白色簡潔字幕，關鍵字淡金色，不使用跳動動畫",
+  },
+  {
+    key: "preferred_image_ratio",
+    label: "圖片比例",
+    placeholder: "例如：4:5",
+    optional: true,
+  },
+  {
+    key: "image_visual_style",
+    label: "圖片視覺風格",
+    placeholder: "例如：自然光、低飽和、留白、避免過度銳化",
+    optional: true,
+  },
+  {
+    key: "social_copy_style",
+    label: "社群文案風格",
+    placeholder: "例如：IG 短句分行、Threads 像自然對話",
+    optional: true,
   },
   {
     key: "preferred_color_direction",

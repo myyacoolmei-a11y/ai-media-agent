@@ -50,9 +50,8 @@ Video upload
 ```
 
 影片會直接上傳至 private Supabase Storage。Railway 上的 Next.js worker
-使用 FFmpeg 擷取音訊與代表畫面，透過 OpenAI 語音辨識取得含時間點逐字稿，
-再把逐字稿、畫面、原片長度與完整製作需求送給 LLM。結構化結果與每次重新生成版本
-都寫入 Supabase。
+使用 FFmpeg 執行裁切、合併與字幕燒錄。影片上傳完成後不再自動呼叫
+Whisper、Vision 或 LLM；語音轉字幕與文字 AI 都必須由使用者主動點擊。
 
 `projects` 與 `content_items` 負責不同生命週期：
 
@@ -71,7 +70,18 @@ Provider contracts 位於 `src/lib/providers/types.ts`：
 - `LlmProvider`
 
 目前提供 Supabase Storage、FFmpeg 與 OpenAI 實作；未設定必要環境變數時，
-介面會阻止上傳並明確顯示設定缺失，不會回退到假資料。
+素材上傳與一般編輯仍可使用，只有使用者主動要求的 AI 功能會明確顯示設定錯誤。
+
+## Cost-controlled production workflows
+
+- 影片：手動設定保留片段與字幕，FFmpeg 裁切、合併及燒錄
+- 圖片：瀏覽器 Canvas 執行裁切、比例、尺寸與品牌框線
+- 文章：直接編輯標題、摘要、內文與社群文案
+- AI 文字：整理、改寫、標題、摘要、文章、社群文案，全部 opt-in
+- 語音辨識：opt-in，點擊前顯示付費確認
+- AI 修圖：opt-in，點擊前顯示付費確認
+
+初次上傳、一般裁切、合併、字幕燒錄、圖片裁切與品牌版型不呼叫 AI API。
 
 ## Authentication and personal style
 
@@ -117,4 +127,10 @@ Email confirmation 可在 Supabase Auth 設定中控制；正式上線建議啟�
 
 ```text
 supabase/migrations/202608100001_content_backend.sql
+```
+
+媒體製作與成本控制需要再套用非破壞 migration：
+
+```text
+supabase/migrations/202608110001_media_production_workflows.sql
 ```

@@ -8,7 +8,8 @@ type RouteContext = {
 };
 
 const statusSchema = z.object({
-  status: z.enum(["draft", "preview", "published"]),
+  status: z.enum(["draft", "preview", "scheduled", "published"]),
+  scheduledAt: z.string().datetime().optional(),
 });
 
 export async function POST(request: Request, context: RouteContext) {
@@ -23,13 +24,24 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   if (
-    payload.data.status === "published" &&
+    (payload.data.status === "published" ||
+      payload.data.status === "scheduled") &&
     (!access.content.title.trim() ||
       !access.content.summary.trim() ||
       !access.content.content.trim())
   ) {
     return NextResponse.json(
       { error: "發布前必須完成標題、摘要與內容。" },
+      { status: 400 },
+    );
+  }
+  if (
+    payload.data.status === "scheduled" &&
+    (!payload.data.scheduledAt ||
+      new Date(payload.data.scheduledAt).getTime() <= Date.now())
+  ) {
+    return NextResponse.json(
+      { error: "排程時間必須晚於現在。" },
       { status: 400 },
     );
   }
@@ -63,6 +75,8 @@ export async function POST(request: Request, context: RouteContext) {
       status: payload.data.status,
       published_at:
         payload.data.status === "published" ? new Date().toISOString() : null,
+      scheduled_at:
+        payload.data.status === "scheduled" ? payload.data.scheduledAt : null,
     })
     .eq("id", contentId)
     .eq("user_id", access.user.id)

@@ -35,13 +35,11 @@ export async function POST(request: Request) {
     .limit(1)
     .single();
   const generated = generatedContentSchema.safeParse(aiResult?.content);
-  if (!generated.success) {
-    return NextResponse.json({ error: "Project 尚未產生可用內容。" }, { status: 409 });
-  }
-
-  const preferred =
-    generated.data.copyVariants.find((variant) => variant.id === "professional") ??
-    generated.data.copyVariants[0];
+  const preferred = generated.success
+    ? generated.data.copyVariants.find(
+        (variant) => variant.id === "professional",
+      ) ?? generated.data.copyVariants[0]
+    : null;
   const id = crypto.randomUUID();
   const { data, error } = await access.supabase
     .from("content_items")
@@ -50,9 +48,13 @@ export async function POST(request: Request) {
       user_id: access.user.id,
       project_id: payload.data.projectId,
       style_profile_id: access.project.style_profile_id,
-      title: generated.data.titles[0],
+      title: generated.success
+        ? generated.data.titles[0]
+        : access.project.name,
       slug: `content-${id.slice(0, 8)}`,
-      summary: generated.data.summary.join(" "),
+      summary: generated.success
+        ? generated.data.summary.join(" ")
+        : access.project.brief?.originalRequest || "",
       content: preferred?.content ?? "",
       video_url: null,
       category: access.project.brief?.purpose || "未分類",

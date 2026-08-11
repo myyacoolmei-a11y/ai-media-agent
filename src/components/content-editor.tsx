@@ -16,10 +16,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ContentAiTools } from "@/components/content-ai-tools";
+import { ImageProductionPanel } from "@/components/image-production-panel";
 import { createClient } from "@/lib/supabase/client";
+import { VideoProductionPanel } from "@/components/video-production-panel";
 import { cn, formatFileSize } from "@/lib/utils";
 import {
   contentStatusLabels,
@@ -60,6 +63,11 @@ export function ContentEditor({
         summary: content.summary,
         content: content.content,
         videoUrl: content.video_url ?? "",
+        socialCopy: {
+          facebook: content.social_copy?.facebook ?? "",
+          instagram: content.social_copy?.instagram ?? "",
+          threads: content.social_copy?.threads ?? "",
+        },
         category: content.category,
         contentType: content.content_type,
         styleProfileId: content.style_profile_id,
@@ -107,7 +115,7 @@ export function ContentEditor({
     }
   }
 
-  async function reloadAssets() {
+  const reloadAssets = useCallback(async () => {
     const response = await fetch(`/api/contents/${content.id}`, {
       cache: "no-store",
     });
@@ -116,7 +124,7 @@ export function ContentEditor({
       setContent(payload.content);
       setAssets(payload.content.assets ?? []);
     }
-  }
+  }, [content.id]);
 
   async function uploadFiles(files: File[]) {
     if (!files.length) return;
@@ -322,6 +330,62 @@ export function ContentEditor({
             />
           </EditorField>
 
+          <ContentAiTools
+            contentId={content.id}
+            sourceText={content.content || content.summary || content.title}
+            onApply={(result, action) =>
+              setContent((current) => ({
+                ...current,
+                title:
+                  action === "title" || action === "article"
+                    ? result.title || current.title
+                    : current.title,
+                summary:
+                  action === "summary" || action === "article"
+                    ? result.summary || current.summary
+                    : current.summary,
+                content:
+                  action === "organize" ||
+                  action === "rewrite" ||
+                  action === "article"
+                    ? result.content || current.content
+                    : current.content,
+                social_copy:
+                  action === "social" ? result.socialCopy : current.social_copy,
+              }))
+            }
+          />
+
+          <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+            <h2 className="text-sm font-medium">社群文案</h2>
+            <p className="mt-1 text-xs text-zinc-600">
+              可自行輸入，或主動使用上方 AI 社群文案功能。
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {(["facebook", "instagram", "threads"] as const).map((platform) => (
+                <label key={platform}>
+                  <span className="mb-2 block text-[11px] capitalize text-zinc-600">
+                    {platform}
+                  </span>
+                  <textarea
+                    rows={6}
+                    value={content.social_copy?.[platform] ?? ""}
+                    onChange={(event) =>
+                      setContent((current) => ({
+                        ...current,
+                        social_copy: {
+                          ...(current.social_copy ?? {}),
+                          [platform]: event.target.value,
+                        },
+                      }))
+                    }
+                    className="editor-input resize-y text-xs leading-6"
+                  />
+                </label>
+              ))}
+            </div>
+          </section>
+
           <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -453,6 +517,23 @@ export function ContentEditor({
               </button>
             )}
           </section>
+
+          {content.content_type === "video" ||
+          content.content_type === "short_video" ? (
+            <VideoProductionPanel
+              content={content}
+              assets={assets}
+              onRendered={reloadAssets}
+            />
+          ) : null}
+
+          {content.content_type === "image" ? (
+            <ImageProductionPanel
+              content={content}
+              assets={assets}
+              onCreated={reloadAssets}
+            />
+          ) : null}
         </section>
 
         <aside className="space-y-5">

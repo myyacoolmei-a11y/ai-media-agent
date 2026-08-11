@@ -10,6 +10,7 @@ type RouteContext = {
 const assetUpdateSchema = z.object({
   altText: z.string().max(500),
   sortOrder: z.number().int().min(0).max(1000),
+  transformSettings: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -27,6 +28,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     .update({
       alt_text: payload.data.altText,
       sort_order: payload.data.sortOrder,
+      transform_settings: payload.data.transformSettings,
     })
     .eq("id", assetId)
     .eq("content_item_id", contentId)

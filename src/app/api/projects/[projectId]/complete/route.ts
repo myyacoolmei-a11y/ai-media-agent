@@ -1,11 +1,6 @@
 import path from "node:path";
 
-import { after, NextResponse } from "next/server";
-
-import {
-  createAnalysisTasks,
-  processProject,
-} from "@/lib/jobs/process-project";
+import { NextResponse } from "next/server";
 import { verifyProjectAccess } from "@/lib/jobs/access";
 
 export const maxDuration = 900;
@@ -51,13 +46,14 @@ export async function POST(_request: Request, context: RouteContext) {
     );
   }
 
-  await createAnalysisTasks(projectId, access.user.id);
   await access.supabase
     .from("projects")
-    .update({ status: "processing", error: null })
+    .update({ status: "draft", error: null })
     .eq("id", projectId);
 
-  after(() => processProject(projectId));
-
-  return NextResponse.json({ projectId, status: "processing" }, { status: 202 });
+  return NextResponse.json({
+    projectId,
+    status: "draft",
+    message: "影片已儲存。語音辨識與 AI 文字工具不會自動執行。",
+  });
 }

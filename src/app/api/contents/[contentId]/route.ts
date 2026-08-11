@@ -77,6 +77,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       summary: payload.data.summary,
       content: payload.data.content,
       video_url: payload.data.videoUrl || null,
+      social_copy: payload.data.socialCopy,
       category: payload.data.category,
       content_type: payload.data.contentType,
       style_profile_id: payload.data.styleProfileId,

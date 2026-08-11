@@ -13,13 +13,17 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ContentAiTools } from "@/components/content-ai-tools";
 import { createClient } from "@/lib/supabase/client";
 import type { ContentItem } from "@/types/content";
+import type { BrandStyleProfile } from "@/types/style";
 
 export function ArticleEditor({
   initialContent,
+  styles,
 }: {
   initialContent: ContentItem;
+  styles: BrandStyleProfile[];
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,9 +44,14 @@ export function ArticleEditor({
         summary: nextArticle.summary,
         content: nextArticle.content,
         videoUrl: nextArticle.video_url ?? "",
+        socialCopy: {
+          facebook: nextArticle.social_copy?.facebook ?? "",
+          instagram: nextArticle.social_copy?.instagram ?? "",
+          threads: nextArticle.social_copy?.threads ?? "",
+        },
         category: "未分類",
         contentType: "article",
-        styleProfileId: null,
+        styleProfileId: nextArticle.style_profile_id,
         coverAssetId: nextArticle.cover_asset_id,
       }),
     });
@@ -243,6 +252,83 @@ export function ArticleEditor({
             className="editor-input text-xl font-medium"
           />
         </label>
+
+        <ContentAiTools
+          contentId={article.id}
+          sourceText={article.content || article.summary || article.title}
+          onApply={(result, action) =>
+            setArticle((current) => ({
+              ...current,
+              title:
+                action === "title" || action === "article"
+                  ? result.title || current.title
+                  : current.title,
+              summary:
+                action === "summary" || action === "article"
+                  ? result.summary || current.summary
+                  : current.summary,
+              content:
+                action === "organize" ||
+                action === "rewrite" ||
+                action === "article"
+                  ? result.content || current.content
+                  : current.content,
+              social_copy:
+                action === "social" ? result.socialCopy : current.social_copy,
+            }))
+          }
+        />
+
+        <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <span className="text-xs text-zinc-400">套用品牌風格</span>
+          <select
+            value={article.style_profile_id ?? ""}
+            onChange={(event) =>
+              setArticle((current) => ({
+                ...current,
+                style_profile_id: event.target.value || null,
+              }))
+            }
+            className="setting-input mt-3"
+          >
+            <option value="">不指定</option>
+            {styles.map((style) => (
+              <option key={style.id} value={style.id}>
+                {style.style_name}
+              </option>
+            ))}
+          </select>
+          <span className="mt-2 block text-[11px] text-zinc-700">
+            主動使用 AI 文字工具時，會自動套用這套風格。
+          </span>
+        </label>
+
+        <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <p className="text-xs text-zinc-400">社群文案</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {(["facebook", "instagram", "threads"] as const).map((platform) => (
+              <label key={platform}>
+                <span className="mb-2 block text-[11px] capitalize text-zinc-600">
+                  {platform}
+                </span>
+                <textarea
+                  rows={6}
+                  value={article.social_copy?.[platform] ?? ""}
+                  onChange={(event) =>
+                    setArticle((current) => ({
+                      ...current,
+                      social_copy: {
+                        ...(current.social_copy ?? {}),
+                        [platform]: event.target.value,
+                      },
+                    }))
+                  }
+                  className="editor-input resize-y text-xs leading-6"
+                />
+              </label>
+            ))}
+          </div>
+        </section>
         <label className="block">
           <span className="mb-2 block text-xs text-zinc-400">摘要</span>
           <textarea
