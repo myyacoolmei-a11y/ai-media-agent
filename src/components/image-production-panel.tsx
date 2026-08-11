@@ -109,7 +109,7 @@ export function ImageProductionPanel({
           0.9,
         ),
       );
-      const fileName = `edited-${Date.now()}.webp`;
+      const fileName = `edited-${crypto.randomUUID()}.webp`;
       const prepareResponse = await fetch(
         `/api/contents/${content.id}/assets`,
         {
