@@ -259,9 +259,21 @@ export function ProjectCreateForm({
       );
       const completed = (await completeResponse.json()) as { error?: string };
       if (!completeResponse.ok) {
-        throw new Error(completed.error || "無法開始分析工作。");
+        throw new Error(completed.error || "無法完成影片上傳。");
       }
-      router.push(`/projects/${created.projectId}/processing`);
+      const draftResponse = await fetch("/api/contents/from-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: created.projectId }),
+      });
+      const draft = (await draftResponse.json()) as {
+        content?: { id: string };
+        error?: string;
+      };
+      if (!draftResponse.ok || !draft.content) {
+        throw new Error(draft.error || "無法建立影片內容草稿。");
+      }
+      router.push(`/dashboard/contents/${draft.content.id}/edit`);
     } catch (submitError) {
       setError(
         submitError instanceof Error ? submitError.message : "影片上傳失敗。",
@@ -275,7 +287,7 @@ export function ProjectCreateForm({
       {!providerStatus.configured && (
         <div className="mb-7 rounded-2xl border border-red-400/25 bg-red-400/[0.07] p-4">
           <p className="text-sm font-medium text-red-200">
-            尚未設定 AI API，因此無法進行真實分析。
+            尚未設定 Supabase，因此無法上傳素材。
           </p>
           <p className="mt-2 text-xs leading-5 text-red-300/60">
             缺少：{providerStatus.missing.join("、")}
@@ -626,7 +638,7 @@ export function ProjectCreateForm({
               disabled={isSubmitting || !providerStatus.configured}
               className="mt-6 w-full"
             >
-              {isSubmitting ? "正在上傳影片…" : "讓 AI 幫我完成"}
+              {isSubmitting ? "正在上傳影片…" : "上傳並進入手動編輯"}
               {!isSubmitting && <ArrowRight className="size-4" />}
             </Button>
           </section>

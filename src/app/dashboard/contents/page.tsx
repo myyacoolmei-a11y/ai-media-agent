@@ -20,6 +20,7 @@ const filters: Array<{ label: string; value?: ContentStatus }> = [
   { label: "全部" },
   { label: "草稿", value: "draft" },
   { label: "預覽中", value: "preview" },
+  { label: "排程", value: "scheduled" },
   { label: "已發布", value: "published" },
   { label: "已封存", value: "archived" },
 ];

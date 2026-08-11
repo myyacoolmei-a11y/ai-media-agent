@@ -12,9 +12,40 @@ export const contentTypeSchema = z.enum([
 export const contentStatusSchema = z.enum([
   "draft",
   "preview",
+  "scheduled",
   "published",
   "archived",
 ]);
+
+export const videoClipSchema = z.object({
+  id: z.string(),
+  startSeconds: z.number().nonnegative(),
+  endSeconds: z.number().positive(),
+});
+
+export const subtitleCueSchema = z.object({
+  id: z.string(),
+  startSeconds: z.number().nonnegative(),
+  endSeconds: z.number().positive(),
+  text: z.string().max(500),
+});
+
+export const videoProductionSchema = z.object({
+  sourceAssetId: z.string().uuid().nullable(),
+  clips: z.array(videoClipSchema),
+  subtitles: z.array(subtitleCueSchema),
+  burnSubtitles: z.boolean(),
+  subtitleStyle: z.string().max(500),
+});
+
+export const imageProductionSchema = z.object({
+  ratio: z.enum(["1:1", "4:5", "16:9", "9:16"]),
+  width: z.number().int().min(320).max(4096),
+  height: z.number().int().min(320).max(4096),
+  template: z.enum(["none", "clean", "editorial", "brand"]),
+  objectPositionX: z.number().min(0).max(100),
+  objectPositionY: z.number().min(0).max(100),
+});
 
 export const contentInputSchema = z.object({
   title: z.string().trim().max(200),
@@ -27,6 +58,13 @@ export const contentInputSchema = z.object({
   summary: z.string().trim().max(1000),
   content: z.string().max(100_000),
   videoUrl: z.union([z.string().url(), z.literal("")]),
+  socialCopy: z
+    .object({
+      facebook: z.string(),
+      instagram: z.string(),
+      threads: z.string(),
+    })
+    .default({ facebook: "", instagram: "", threads: "" }),
   category: z.string().trim().min(1).max(100),
   contentType: contentTypeSchema,
   styleProfileId: z.string().uuid().nullable(),
@@ -71,6 +109,9 @@ export type ContentItem = {
   summary: string;
   content: string;
   video_url: string | null;
+  social_copy: Record<string, string>;
+  production_data: Record<string, unknown>;
+  scheduled_at: string | null;
   category: string;
   content_type: ContentType;
   status: ContentStatus;
@@ -88,6 +129,7 @@ export type PublicContentItem = {
   summary: string;
   content: string;
   videoUrl: string | null;
+  video: string | null;
   coverImage: string | null;
   category: string;
   contentType: ContentType;
@@ -114,4 +156,5 @@ export const contentStatusLabels: Record<ContentStatus, string> = {
   preview: "預覽中",
   published: "已發布",
   archived: "已封存",
+  scheduled: "排程發布",
 };

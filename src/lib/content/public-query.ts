@@ -20,6 +20,13 @@ export async function serializePublicContent(
     60 * 60 * 24,
   );
   const cover = assets.find((asset) => asset.id === content.cover_asset_id);
+  const outputAssetId =
+    typeof content.production_data?.outputAssetId === "string"
+      ? content.production_data.outputAssetId
+      : null;
+  const primaryVideo =
+    assets.find((asset) => asset.id === outputAssetId) ??
+    assets.find((asset) => asset.asset_type === "video");
 
   return {
     title: content.title,
@@ -27,6 +34,7 @@ export async function serializePublicContent(
     summary: content.summary,
     content: content.content,
     videoUrl: content.video_url,
+    video: primaryVideo?.signed_url ?? null,
     coverImage: cover?.signed_url ?? null,
     category: content.category,
     contentType: content.content_type,

@@ -25,6 +25,14 @@ export const brandStyleInputSchema = z.object({
   outro_template: z.string().trim().max(2000),
   reference_content: z.array(referenceContentSchema).max(20),
   negative_examples: z.string().trim().max(3000),
+  brand_name: z.string().trim().max(200).default(""),
+  article_tone: z.string().trim().max(1000).default(""),
+  text_style: z.string().trim().max(2000).default(""),
+  forbidden_expressions: z.string().trim().max(2000).default(""),
+  preferred_video_length: z.string().trim().max(500).default(""),
+  preferred_image_ratio: z.string().trim().max(50).default("1:1"),
+  image_visual_style: z.string().trim().max(2000).default(""),
+  social_copy_style: z.string().trim().max(2000).default(""),
 });
 
 export type BrandStyleInput = z.infer<typeof brandStyleInputSchema>;
