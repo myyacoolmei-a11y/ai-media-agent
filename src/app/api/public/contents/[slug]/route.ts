@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { serializePublicContent } from "@/lib/content/public-query";
-import { createAdminClient } from "@/lib/supabase/admin";
-import type { ContentItem } from "@/types/content";
+import { getPublishedStory } from "@/lib/content/published";
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
@@ -10,18 +8,12 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { slug } = await context.params;
-  const { data, error } = await createAdminClient()
-    .from("content_items")
-    .select("*")
-    .eq("slug", slug)
-    .eq("status", "published")
-    .lte("published_at", new Date().toISOString())
-    .single();
-  if (error || !data) {
+  const item = await getPublishedStory(slug);
+  if (!item) {
     return NextResponse.json({ error: "找不到已發布內容。" }, { status: 404 });
   }
   return NextResponse.json(
-    { item: await serializePublicContent(data as ContentItem) },
+    { item },
     {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",

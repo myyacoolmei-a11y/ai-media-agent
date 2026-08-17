@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { parseOptionalIsoDate } from "@/lib/content/dates";
+import { getPreviewDemoContentItems } from "@/lib/content/preview-demo";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   contentInputSchema,
@@ -13,6 +15,10 @@ export async function GET(request: Request) {
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
+  }
+
+  if (isPreviewDemo()) {
+    return NextResponse.json({ contents: getPreviewDemoContentItems() });
   }
 
   const url = new URL(request.url);
@@ -39,6 +45,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });

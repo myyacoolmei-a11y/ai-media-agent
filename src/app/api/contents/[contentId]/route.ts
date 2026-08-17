@@ -6,6 +6,7 @@ import {
   verifyContentAccess,
 } from "@/lib/content/access";
 import { parseOptionalIsoDate } from "@/lib/content/dates";
+import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { contentInputSchema } from "@/types/content";
 
 type RouteContext = {
@@ -28,11 +29,13 @@ export async function GET(_request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const { contentId } = await context.params;
   const access = await verifyContentAccess(contentId);
   if (!access) {
     return NextResponse.json({ error: "找不到內容或沒有權限。" }, { status: 404 });
   }
+  if (!access.supabase) return previewWriteBlocked();
 
   const payload = updateSchema.safeParse(await request.json());
   if (!payload.success) {
@@ -119,11 +122,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const { contentId } = await context.params;
   const access = await verifyContentAccess(contentId);
   if (!access) {
     return NextResponse.json({ error: "找不到內容或沒有權限。" }, { status: 404 });
   }
+  if (!access.supabase) return previewWriteBlocked();
   await access.supabase
     .from("content_items")
     .update({ status: "archived", published_at: null })

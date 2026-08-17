@@ -1,10 +1,18 @@
+import { getPreviewDemoContentItem } from "@/lib/content/preview-demo";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ContentAsset, ContentItem } from "@/types/content";
 
 export async function verifyContentAccess(contentId: string) {
   const user = await getAuthenticatedUser();
   if (!user) return null;
+
+  if (isPreviewDemo()) {
+    const content = getPreviewDemoContentItem(contentId);
+    if (!content) return null;
+    return { user, supabase: null, content };
+  }
 
   const supabase = createAdminClient();
   const { data: content, error } = await supabase
@@ -37,6 +45,14 @@ export async function loadContentWithAssets(
   content: ContentItem,
   expiresIn = 3600,
 ) {
+  if (isPreviewDemo()) {
+    return {
+      ...content,
+      assets: [] as ContentAsset[],
+      cover_image: content.cover_image ?? null,
+    };
+  }
+
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("content_assets")

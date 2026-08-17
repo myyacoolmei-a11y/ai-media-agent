@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 import type { BrandStyleProfile } from "@/types/style";
@@ -12,12 +13,15 @@ export default async function StylesPage() {
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login?next=/styles");
 
-  const { data } = await createAdminClient()
-    .from("brand_style_profiles")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("updated_at", { ascending: false });
-  const styles = (data ?? []) as BrandStyleProfile[];
+  let styles: BrandStyleProfile[] = [];
+  if (!isPreviewDemo()) {
+    const { data } = await createAdminClient()
+      .from("brand_style_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false });
+    styles = (data ?? []) as BrandStyleProfile[];
+  }
 
   return (
     <div>

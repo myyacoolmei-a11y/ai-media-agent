@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
 import { formatStoryDate } from "@/lib/content/dates";
+import { getPreviewDemoContentItems } from "@/lib/content/preview-demo";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   contentStatusLabels,
@@ -15,13 +17,19 @@ import {
 export default async function AdminContentListPage() {
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login?next=/admin/content");
-  const { data } = await createAdminClient()
-    .from("content_items")
-    .select("*")
-    .eq("user_id", user.id)
-    .in("status", ["draft", "published"])
-    .order("updated_at", { ascending: false });
-  const items = (data ?? []) as ContentItem[];
+
+  let items: ContentItem[] = [];
+  if (isPreviewDemo()) {
+    items = getPreviewDemoContentItems();
+  } else {
+    const { data } = await createAdminClient()
+      .from("content_items")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("status", ["draft", "published"])
+      .order("updated_at", { ascending: false });
+    items = (data ?? []) as ContentItem[];
+  }
 
   return (
     <div>

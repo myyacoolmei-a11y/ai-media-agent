@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { verifyContentAccess } from "@/lib/content/access";
+import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 
 type RouteContext = {
   params: Promise<{ contentId: string }>;
@@ -12,11 +13,13 @@ const statusSchema = z.object({
 });
 
 export async function POST(request: Request, context: RouteContext) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const { contentId } = await context.params;
   const access = await verifyContentAccess(contentId);
   if (!access) {
     return NextResponse.json({ error: "找不到內容或沒有權限。" }, { status: 404 });
   }
+  if (!access.supabase) return previewWriteBlocked();
   const payload = statusSchema.safeParse(await request.json());
   if (!payload.success) {
     return NextResponse.json({ error: "狀態不正確。" }, { status: 400 });

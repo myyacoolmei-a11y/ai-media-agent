@@ -1,7 +1,18 @@
+import { cookies } from "next/headers";
+import type { User } from "@supabase/supabase-js";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isPreviewDemo, PREVIEW_DEMO_COOKIE, PREVIEW_DEMO_USER } from "@/lib/preview";
 
 export async function getAuthenticatedUser() {
+  if (isPreviewDemo()) {
+    const jar = await cookies();
+    if (jar.get(PREVIEW_DEMO_COOKIE)?.value === "1") {
+      return PREVIEW_DEMO_USER as User;
+    }
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -12,6 +23,7 @@ export async function getAuthenticatedUser() {
 }
 
 export async function verifyProjectAccess(projectId: string) {
+  if (isPreviewDemo()) return null;
   const user = await getAuthenticatedUser();
   if (!user) return null;
 

@@ -11,8 +11,8 @@ export default async function HomePage() {
   const featured =
     stories.find((story) => story.coverImage) ?? stories[0] ?? null;
   const rest = stories.filter((story) => story.slug !== featured?.slug);
-  const headlines = rest.slice(0, 6);
-  const latest = rest.slice(0, 9);
+  const headlines = rest.filter((story) => !isVideoStory(story)).slice(0, 6);
+  const latest = rest.filter((story) => !isVideoStory(story)).slice(0, 9);
   const videos = stories.filter(isVideoStory).slice(0, 3);
 
   return (

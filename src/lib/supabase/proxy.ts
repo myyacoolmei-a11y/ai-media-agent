@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { safeInternalPath } from "@/lib/auth/paths";
+import { isPreviewDemo, PREVIEW_DEMO_COOKIE } from "@/lib/preview";
 import { supabaseConfig } from "@/lib/supabase/config";
 
 export async function updateSession(request: NextRequest) {
@@ -27,7 +28,9 @@ export async function updateSession(request: NextRequest) {
   );
 
   let userId: string | undefined;
-  if (supabaseConfig.isConfigured) {
+  if (isPreviewDemo() && request.cookies.get(PREVIEW_DEMO_COOKIE)?.value === "1") {
+    userId = "preview-demo-user";
+  } else if (supabaseConfig.isConfigured) {
     const { data } = await supabase.auth.getClaims();
     userId = data?.claims?.sub;
   }

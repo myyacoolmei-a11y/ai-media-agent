@@ -17,15 +17,51 @@ export function AccountMenu({
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
-    void supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null);
-      setLoaded(true);
-    });
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const preview = (await fetch("/api/preview-login").then((response) =>
+          response.json(),
+        )) as { enabled?: boolean; authenticated?: boolean; email?: string | null };
+        if (cancelled) return;
+        if (preview.enabled && preview.authenticated) {
+          setEmail(preview.email ?? "preview@ai-media.local");
+          setLoaded(true);
+          return;
+        }
+      } catch {
+        // Fall through to Supabase session.
+      }
+
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.auth.getUser();
+        if (!cancelled) {
+          setEmail(data.user?.email ?? null);
+          setLoaded(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setEmail(null);
+          setLoaded(true);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function logout() {
-    await createClient().auth.signOut();
+    await fetch("/api/preview-login", { method: "DELETE" }).catch(() => undefined);
+    try {
+      await createClient().auth.signOut();
+    } catch {
+      // Preview 沒有真實 Supabase session。
+    }
     router.replace("/");
     router.refresh();
   }

@@ -1,5 +1,7 @@
+import { listPreviewDemoStories, getPreviewDemoStory } from "@/lib/content/preview-demo";
 import { serializePublicContent } from "@/lib/content/public-query";
 import { isVideoStory } from "@/lib/content/video";
+import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ContentItem, PublicContentItem } from "@/types/content";
 
@@ -8,6 +10,9 @@ export async function listPublishedStories(options: {
   videosOnly?: boolean;
   category?: string;
 } = {}): Promise<PublicContentItem[]> {
+  if (isPreviewDemo()) {
+    return listPreviewDemoStories(options);
+  }
   try {
     const limit = options.limit ?? 30;
     let query = createAdminClient()
@@ -43,6 +48,9 @@ export async function listPublishedStories(options: {
 }
 
 export async function getPublishedStory(slug: string) {
+  if (isPreviewDemo()) {
+    return getPreviewDemoStory(slug);
+  }
   try {
     const { data, error } = await createAdminClient()
       .from("content_items")

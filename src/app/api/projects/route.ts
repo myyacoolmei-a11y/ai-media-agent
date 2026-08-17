@@ -3,6 +3,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { getProviderStatus } from "@/lib/providers/config";
 import { SupabaseMediaStorageProvider } from "@/lib/providers/supabase-storage";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -15,6 +16,7 @@ const allowedVideoTypes = new Set([
 ]);
 
 export async function POST(request: Request) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });

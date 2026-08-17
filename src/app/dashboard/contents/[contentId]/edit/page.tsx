@@ -18,19 +18,21 @@ export default async function EditContentPage({
   const access = await verifyContentAccess(contentId);
   if (!access) notFound();
 
-  const [{ data: styles }, content] = await Promise.all([
-    access.supabase
+  const content = await loadContentWithAssets(access.content);
+  let styles: BrandStyleProfile[] = [];
+  if (access.supabase) {
+    const { data } = await access.supabase
       .from("brand_style_profiles")
       .select("*")
       .eq("user_id", access.user.id)
-      .order("updated_at", { ascending: false }),
-    loadContentWithAssets(access.content),
-  ]);
+      .order("updated_at", { ascending: false });
+    styles = (data ?? []) as BrandStyleProfile[];
+  }
 
   return (
     <ContentEditor
       initialContent={content}
-      styles={(styles ?? []) as BrandStyleProfile[]}
+      styles={styles}
     />
   );
 }

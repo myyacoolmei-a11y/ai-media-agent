@@ -3,6 +3,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { verifyContentAccess } from "@/lib/content/access";
+import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { contentAssetRequestSchema } from "@/types/content";
 
 type RouteContext = {
@@ -16,11 +17,13 @@ const allowedTypes = {
 };
 
 export async function POST(request: Request, context: RouteContext) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const { contentId } = await context.params;
   const access = await verifyContentAccess(contentId);
   if (!access) {
     return NextResponse.json({ error: "找不到內容或沒有權限。" }, { status: 404 });
   }
+  if (!access.supabase) return previewWriteBlocked();
 
   const payload = contentAssetRequestSchema.safeParse(await request.json());
   if (!payload.success) {

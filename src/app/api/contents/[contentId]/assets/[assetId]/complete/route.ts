@@ -3,17 +3,20 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 
 import { verifyContentAccess } from "@/lib/content/access";
+import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 
 type RouteContext = {
   params: Promise<{ contentId: string; assetId: string }>;
 };
 
 export async function POST(_request: Request, context: RouteContext) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const { contentId, assetId } = await context.params;
   const access = await verifyContentAccess(contentId);
   if (!access) {
     return NextResponse.json({ error: "找不到內容或沒有權限。" }, { status: 404 });
   }
+  if (!access.supabase) return previewWriteBlocked();
   const { data: asset } = await access.supabase
     .from("content_assets")
     .select("*")

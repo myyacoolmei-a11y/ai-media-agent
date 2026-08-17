@@ -3,7 +3,7 @@
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { safeInternalPath } from "@/lib/auth/paths";
@@ -51,7 +51,18 @@ export function AuthForm({
   const [error, setError] = useState(searchParams.get("error") ?? "");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [previewEnabled, setPreviewEnabled] = useState(false);
   const page = content[mode];
+
+  useEffect(() => {
+    if (mode !== "login") return;
+    void fetch("/api/preview-login")
+      .then((response) => response.json())
+      .then((payload: { enabled?: boolean }) => {
+        setPreviewEnabled(Boolean(payload.enabled));
+      })
+      .catch(() => undefined);
+  }, [mode]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,6 +126,25 @@ export function AuthForm({
         authError instanceof Error ? authError.message : "操作失敗，請稍後再試。",
       );
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function enterPreview() {
+    setError("");
+    setLoading(true);
+    try {
+      const response = await fetch("/api/preview-login", { method: "POST" });
+      if (!response.ok) {
+        throw new Error("這個環境不是 Preview。");
+      }
+      const next = safeInternalPath(searchParams.get("next"), defaultNext);
+      router.replace(next);
+      router.refresh();
+    } catch (previewError) {
+      setError(
+        previewError instanceof Error ? previewError.message : "無法進入 Preview 後台。",
+      );
       setLoading(false);
     }
   }
@@ -187,7 +217,18 @@ export function AuthForm({
             {message}
           </p>
         )}
-        <Button type="submit" className="mt-6 w-full" disabled={loading}>
+        {previewEnabled && mode === "login" && (
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-6 w-full"
+            disabled={loading}
+            onClick={enterPreview}
+          >
+            {loading ? <LoaderCircle className="size-4 animate-spin" /> : "進入 Preview 後台"}
+          </Button>
+        )}
+        <Button type="submit" className={previewEnabled ? "mt-3 w-full" : "mt-6 w-full"} disabled={loading}>
           {loading ? <LoaderCircle className="size-4 animate-spin" /> : page.submit}
           {!loading && <ArrowRight className="size-4" />}
         </Button>

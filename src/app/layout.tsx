@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Serif_TC } from "next/font/google";
 import "./globals.css";
 
+import { PreviewBanner } from "@/components/preview-banner";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -36,7 +38,10 @@ export default function RootLayout({
       lang="zh-Hant"
       className={`${geistSans.variable} ${geistMono.variable} ${newsSerif.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[#070707] text-white">{children}</body>
+      <body className="min-h-full bg-[#070707] text-white">
+        <PreviewBanner />
+        {children}
+      </body>
     </html>
   );
 }

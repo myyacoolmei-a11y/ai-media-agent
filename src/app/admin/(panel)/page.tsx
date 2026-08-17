@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
 import { formatStoryDateTime } from "@/lib/content/dates";
+import { getPreviewDemoContentItems } from "@/lib/content/preview-demo";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 import {
@@ -16,27 +18,38 @@ export default async function AdminHomePage() {
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login?next=/admin");
 
-  const supabase = createAdminClient();
-  const [drafts, published, recent] = await Promise.all([
-    supabase
-      .from("content_items")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("status", "draft"),
-    supabase
-      .from("content_items")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("status", "published"),
-    supabase
-      .from("content_items")
-      .select("*")
-      .eq("user_id", user.id)
-      .in("status", ["draft", "published"])
-      .order("updated_at", { ascending: false })
-      .limit(6),
-  ]);
-  const items = (recent.data ?? []) as ContentItem[];
+  let draftCount = 0;
+  let publishedCount = 0;
+  let items: ContentItem[] = [];
+
+  if (isPreviewDemo()) {
+    items = getPreviewDemoContentItems();
+    publishedCount = items.length;
+  } else {
+    const supabase = createAdminClient();
+    const [drafts, published, recent] = await Promise.all([
+      supabase
+        .from("content_items")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "draft"),
+      supabase
+        .from("content_items")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "published"),
+      supabase
+        .from("content_items")
+        .select("*")
+        .eq("user_id", user.id)
+        .in("status", ["draft", "published"])
+        .order("updated_at", { ascending: false })
+        .limit(6),
+    ]);
+    draftCount = drafts.count ?? 0;
+    publishedCount = published.count ?? 0;
+    items = (recent.data ?? []) as ContentItem[];
+  }
 
   return (
     <div>
@@ -76,8 +89,8 @@ export default async function AdminHomePage() {
 
       <div className="mt-9 grid gap-3 sm:grid-cols-2">
         {[
-          ["草稿", drafts.count ?? 0, FileText],
-          ["已發布", published.count ?? 0, Send],
+          ["草稿", draftCount, FileText],
+          ["已發布", publishedCount, Send],
         ].map(([label, count, Icon]) => {
           const StatIcon = Icon as typeof FileText;
           return (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { verifyProjectAccess } from "@/lib/jobs/access";
+import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { generatedContentSchema } from "@/types/analysis";
 
 const importSchema = z.object({
@@ -9,6 +10,7 @@ const importSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const payload = importSchema.safeParse(await request.json());
   if (!payload.success) {
     return NextResponse.json({ error: "Project ID 不正確。" }, { status: 400 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { brandStyleInputSchema } from "@/types/style";
 
@@ -8,6 +9,9 @@ export async function GET() {
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
+  }
+  if (isPreviewDemo()) {
+    return NextResponse.json({ styles: [] });
   }
 
   const { data, error } = await createAdminClient()
@@ -23,6 +27,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (isPreviewDemo()) return previewWriteBlocked();
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
