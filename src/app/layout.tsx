@@ -14,11 +14,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "AI Media Agent — 從素材到內容",
-    template: "%s · AI Media Agent",
+    default: "AI Media",
+    template: "%s · AI Media",
   },
-  description:
-    "上傳影片，讓 AI 完成語音辨識、畫面分析、重點整理與社群文案。",
+  description: "AI Media 媒體網站：最新報導、影音報導與內容後台。",
 };
 
 export default function RootLayout({

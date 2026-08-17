@@ -6,14 +6,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { safeInternalPath } from "@/lib/auth/paths";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "login" | "signup" | "forgot" | "reset";
 
 const content = {
   login: {
-    title: "歡迎回來",
-    description: "登入後繼續使用你的品牌風格與內容紀錄。",
+    title: "管理員登入",
+    description: "登入後即可新增報導，並發布到媒體前台。",
     submit: "登入",
   },
   signup: {
@@ -35,10 +36,12 @@ const content = {
 
 export function AuthForm({
   mode,
-  defaultNext = "/dashboard",
+  defaultNext = "/admin",
+  showAlternateAuth = true,
 }: {
   mode: AuthMode;
   defaultNext?: string;
+  showAlternateAuth?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -74,8 +77,8 @@ export function AuthForm({
           password,
         });
         if (authError) throw authError;
-        const next = searchParams.get("next");
-        router.replace(next?.startsWith("/") ? next : defaultNext);
+        const next = safeInternalPath(searchParams.get("next"), defaultNext);
+        router.replace(next);
         router.refresh();
       } else if (mode === "signup") {
         const { data, error: authError } = await supabase.auth.signUp({
@@ -193,9 +196,13 @@ export function AuthForm({
             <Link href="/forgot-password" className="text-zinc-500 hover:text-white">
               忘記密碼？
             </Link>
-            <Link href="/signup" className="text-[#e2b8bd] hover:text-white">
-              建立帳號
-            </Link>
+            {showAlternateAuth ? (
+              <Link href="/signup" className="text-[#e2b8bd] hover:text-white">
+                建立帳號
+              </Link>
+            ) : (
+              <span />
+            )}
           </div>
         )}
         {mode === "signup" && (

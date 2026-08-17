@@ -30,6 +30,7 @@ export const contentInputSchema = z.object({
   category: z.string().trim().min(1).max(100),
   contentType: contentTypeSchema,
   styleProfileId: z.string().uuid().nullable(),
+  publishedAt: z.string().optional(),
 });
 
 export const contentAssetRequestSchema = z.object({

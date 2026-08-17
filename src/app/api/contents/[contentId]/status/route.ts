@@ -62,7 +62,9 @@ export async function POST(request: Request, context: RouteContext) {
     .update({
       status: payload.data.status,
       published_at:
-        payload.data.status === "published" ? new Date().toISOString() : null,
+        payload.data.status === "published"
+          ? access.content.published_at ?? new Date().toISOString()
+          : access.content.published_at,
     })
     .eq("id", contentId)
     .eq("user_id", access.user.id)

@@ -7,7 +7,11 @@ import { useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 
-export function AccountMenu() {
+export function AccountMenu({
+  variant = "public",
+}: {
+  variant?: "public" | "admin";
+}) {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -42,20 +46,23 @@ export function AccountMenu() {
 
   return (
     <>
-      <Link
-        href="/dashboard"
-        className="flex items-center gap-2 rounded-full px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-white"
-      >
-        <LayoutDashboard className="size-3.5" />
-        <span className="hidden sm:inline">後台</span>
-      </Link>
-      <Link
-        href="/styles"
-        className="flex items-center gap-2 rounded-full px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-white"
-      >
-        <Palette className="size-3.5" />
-        <span className="hidden sm:inline">我的風格</span>
-      </Link>
+      {variant === "public" ? (
+        <Link
+          href="/admin"
+          className="flex items-center gap-2 rounded-full px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-white"
+        >
+          <LayoutDashboard className="size-3.5" />
+          <span className="hidden sm:inline">後台</span>
+        </Link>
+      ) : (
+        <Link
+          href="/styles"
+          className="flex items-center gap-2 rounded-full px-3 py-2 text-xs text-zinc-400 transition hover:bg-white/[0.04] hover:text-white"
+        >
+          <Palette className="size-3.5" />
+          <span className="hidden sm:inline">品牌風格</span>
+        </Link>
+      )}
       <button
         type="button"
         onClick={logout}

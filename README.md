@@ -6,11 +6,29 @@ Brand Style Profile；每個影片專案都必須指定一套風格，AI 會優�
 
 ## MVP routes
 
-- `/` — 影片內容製作入口
+公開前台只顯示 `published` 且已到發布時間的內容：
+
+- `/` — 媒體首頁
+- `/news` — 最新報導列表
+- `/article/[slug]` — 單篇報導
+- `/video` — 影音報導
+
+私人後台沿用既有 Auth 與 `content_items`：
+
+- `/login` — 管理員登入
+- `/admin` — 後台首頁
+- `/admin/content` — 內容列表
+- `/admin/content/new` — 新增報導
+- `/admin/content/[id]/edit` — 編輯報導
+
+舊網址會導向新路由：`/articles/[slug]`、`/admin/login`、`/admin/new`、`/admin/[id]/edit`。
+
+既有 AI 製作與風格功能仍可使用：
+
 - `/projects/new` — 建立專案與影片上傳
 - `/projects/[projectId]/processing` — 真實處理工作進度
 - `/projects/[projectId]/results` — 完整內容輸出
-- `/login`、`/signup` — Supabase Email Authentication
+- `/signup` — 建立帳號
 - `/forgot-password`、`/reset-password` — 密碼重設
 - `/styles` — 多風格管理與 AI 學習紀錄
 - `/styles/new` — 建立 Brand Style Profile
@@ -19,12 +37,16 @@ Brand Style Profile；每個影片專案都必須指定一套風格，AI 會優�
 - `/dashboard/contents/new` — 建立影片、圖文或文章內容
 - `/dashboard/contents/[contentId]/edit` — 統一內容編輯器
 - `/dashboard/contents/[contentId]/preview` — 發布前預覽
-- `/admin/login` — 最小可用後台登入
-- `/admin` — 文章列表
-- `/admin/new` — 新增文章
-- `/admin/[contentId]/edit` — 文章編輯與發布
-- `/` — 已發布文章列表
-- `/articles/[slug]` — 已發布單篇文章
+- `POST /api/projects` — 建立工作與 Supabase signed upload
+- `POST /api/projects/[projectId]/complete` — 驗證上傳並啟動處理
+- `GET/PATCH /api/projects/[projectId]` — 讀取與儲存結果
+- `POST /api/projects/[projectId]/regenerate` — 使用原素材重新生成
+- `GET/POST /api/contents` — 登入使用者的內容列表與建立草稿
+- `GET/PATCH /api/contents/[contentId]` — 內容讀取與編輯
+- `POST /api/contents/[contentId]/status` — 草稿／預覽／發布
+- `POST /api/contents/[contentId]/assets` — 圖片與影片 signed upload
+- `GET /api/public/contents` — 已發布內容公開列表
+- `GET /api/public/contents/[slug]` — 已發布內容公開明細
 - `POST /api/projects` — 建立工作與 Supabase signed upload
 - `POST /api/projects/[projectId]/complete` — 驗證上傳並啟動處理
 - `GET/PATCH /api/projects/[projectId]` — 讀取與儲存結果

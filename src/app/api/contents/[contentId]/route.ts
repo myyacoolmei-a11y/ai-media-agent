@@ -5,6 +5,7 @@ import {
   loadContentWithAssets,
   verifyContentAccess,
 } from "@/lib/content/access";
+import { parseOptionalIsoDate } from "@/lib/content/dates";
 import { contentInputSchema } from "@/types/content";
 
 type RouteContext = {
@@ -51,6 +52,20 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "品牌風格不存在。" }, { status: 400 });
     }
   }
+  const publishedAt = parseOptionalIsoDate(payload.data.publishedAt);
+  if (!publishedAt.ok) {
+    return NextResponse.json({ error: "發布時間格式不正確。" }, { status: 400 });
+  }
+  if (
+    access.content.status === "published" &&
+    publishedAt.value === null
+  ) {
+    return NextResponse.json(
+      { error: "已發布內容必須有發布時間。" },
+      { status: 400 },
+    );
+  }
+
   if (payload.data.coverAssetId) {
     const { data: asset } = await access.supabase
       .from("content_assets")
@@ -81,6 +96,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       content_type: payload.data.contentType,
       style_profile_id: payload.data.styleProfileId,
       cover_asset_id: payload.data.coverAssetId,
+      ...(publishedAt.value !== undefined
+        ? { published_at: publishedAt.value }
+        : {}),
     })
     .eq("id", contentId)
     .eq("user_id", access.user.id)

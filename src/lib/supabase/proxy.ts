@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeInternalPath } from "@/lib/auth/paths";
 import { supabaseConfig } from "@/lib/supabase/config";
 
 export async function updateSession(request: NextRequest) {
@@ -31,22 +32,19 @@ export async function updateSession(request: NextRequest) {
     userId = data?.claims?.sub;
   }
 
+  const pathname = request.nextUrl.pathname;
+  const isAdminLogin = pathname === "/admin/login";
   const protectedPath =
-    (request.nextUrl.pathname.startsWith("/admin") &&
-      request.nextUrl.pathname !== "/admin/login") ||
-    request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/projects") ||
-    request.nextUrl.pathname.startsWith("/styles");
-  const authPath =
-    request.nextUrl.pathname === "/admin/login" ||
-    request.nextUrl.pathname === "/login" ||
-    request.nextUrl.pathname === "/signup";
+    (pathname.startsWith("/admin") && !isAdminLogin) ||
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/projects") ||
+    pathname.startsWith("/styles");
+  const authPath = isAdminLogin || pathname === "/login" || pathname === "/signup";
 
   if (protectedPath && !userId) {
     const url = request.nextUrl.clone();
-    url.pathname = request.nextUrl.pathname.startsWith("/admin")
-      ? "/admin/login"
-      : "/login";
+    url.pathname = "/login";
+    url.search = "";
     url.searchParams.set(
       "next",
       `${request.nextUrl.pathname}${request.nextUrl.search}`,
@@ -56,8 +54,10 @@ export async function updateSession(request: NextRequest) {
 
   if (authPath && userId) {
     const url = request.nextUrl.clone();
-    url.pathname =
-      request.nextUrl.pathname === "/admin/login" ? "/admin" : "/dashboard";
+    url.pathname = safeInternalPath(
+      request.nextUrl.searchParams.get("next"),
+      "/admin",
+    );
     url.search = "";
     return NextResponse.redirect(url);
   }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { parseOptionalIsoDate } from "@/lib/content/dates";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -51,6 +52,11 @@ export async function POST(request: Request) {
     );
   }
 
+  const publishedAt = parseOptionalIsoDate(payload.data.publishedAt);
+  if (!publishedAt.ok) {
+    return NextResponse.json({ error: "發布時間格式不正確。" }, { status: 400 });
+  }
+
   const supabase = createAdminClient();
   if (payload.data.styleProfileId) {
     const { data: style } = await supabase
@@ -77,6 +83,7 @@ export async function POST(request: Request) {
       content_type: payload.data.contentType,
       style_profile_id: payload.data.styleProfileId,
       status: "draft",
+      published_at: publishedAt.value ?? null,
     })
     .select("*")
     .single();

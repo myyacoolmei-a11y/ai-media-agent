@@ -1,74 +1,126 @@
-import { FileText, Plus } from "lucide-react";
+import { ArrowRight, FileText, Plus, Send } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
+import { formatStoryDateTime } from "@/lib/content/dates";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ContentItem } from "@/types/content";
+import { cn } from "@/lib/utils";
+import {
+  contentStatusLabels,
+  type ContentItem,
+} from "@/types/content";
 
-export default async function AdminPage() {
+export default async function AdminHomePage() {
   const user = await getAuthenticatedUser();
-  if (!user) redirect("/admin/login");
-  const { data } = await createAdminClient()
-    .from("content_items")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("content_type", "article")
-    .in("status", ["draft", "published"])
-    .order("updated_at", { ascending: false });
-  const articles = (data ?? []) as ContentItem[];
+  if (!user) redirect("/login?next=/admin");
+
+  const supabase = createAdminClient();
+  const [drafts, published, recent] = await Promise.all([
+    supabase
+      .from("content_items")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("status", "draft"),
+    supabase
+      .from("content_items")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("status", "published"),
+    supabase
+      .from("content_items")
+      .select("*")
+      .eq("user_id", user.id)
+      .in("status", ["draft", "published"])
+      .order("updated_at", { ascending: false })
+      .limit(6),
+  ]);
+  const items = (recent.data ?? []) as ContentItem[];
 
   return (
     <div>
-      <div className="flex items-end justify-between gap-5">
+      <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-3xl font-semibold tracking-[-0.045em]">文章管理</h1>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-[#d3b176]">
+            Admin
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.045em]">
+            媒體後台
+          </h1>
           <p className="mt-3 text-sm text-zinc-500">
-            新增文章、儲存草稿，確認後發布到媒體網站。
+            新增報導、儲存草稿，發布後就會出現在公開首頁。
           </p>
         </div>
-        <Link href="/admin/new" className={buttonVariants()}>
+        <Link href="/admin/content/new" className={buttonVariants()}>
           <Plus className="size-4" />
-          新增文章
+          新增報導
         </Link>
       </div>
 
-      <div className="mt-8 overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.02]">
-        {articles.length ? (
-          articles.map((article) => (
-            <Link
-              key={article.id}
-              href={`/admin/${article.id}/edit`}
-              className="grid gap-2 border-b border-white/[0.06] p-5 last:border-0 hover:bg-white/[0.025] sm:grid-cols-[1fr_100px_140px] sm:items-center"
+      <div className="mt-9 grid gap-3 sm:grid-cols-2">
+        {[
+          ["草稿", drafts.count ?? 0, FileText],
+          ["已發布", published.count ?? 0, Send],
+        ].map(([label, count, Icon]) => {
+          const StatIcon = Icon as typeof FileText;
+          return (
+            <div
+              key={label as string}
+              className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5"
             >
-              <div>
-                <p className="text-sm text-zinc-200">{article.title}</p>
-                <p className="mt-1 line-clamp-1 text-xs text-zinc-700">
-                  {article.summary || "尚未填寫摘要"}
+              <StatIcon className="size-4 text-[#d3b176]" />
+              <p className="mt-8 text-3xl font-semibold">{count as number}</p>
+              <p className="mt-1 text-xs text-zinc-600">{label as string}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <section className="mt-8 rounded-[28px] border border-white/[0.07] bg-white/[0.02]">
+        <div className="flex items-center justify-between border-b border-white/[0.06] p-5">
+          <h2 className="text-sm font-medium">最近內容</h2>
+          <Link
+            href="/admin/content"
+            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-white"
+          >
+            內容列表
+            <ArrowRight className="size-3" />
+          </Link>
+        </div>
+        {items.length ? (
+          items.map((item) => (
+            <Link
+              key={item.id}
+              href={`/admin/content/${item.id}/edit`}
+              className="flex items-center gap-4 border-b border-white/[0.05] px-5 py-4 last:border-0 hover:bg-white/[0.02]"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-zinc-200">
+                  {item.title || "未命名報導"}
+                </p>
+                <p className="mt-1 text-[11px] text-zinc-700">
+                  {formatStoryDateTime(item.updated_at)}
                 </p>
               </div>
               <span
-                className={
-                  article.status === "published"
-                    ? "text-xs text-emerald-300"
-                    : "text-xs text-zinc-600"
-                }
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[10px]",
+                  item.status === "published"
+                    ? "bg-emerald-300/10 text-emerald-300"
+                    : "bg-white/[0.04] text-zinc-500",
+                )}
               >
-                {article.status === "published" ? "已發布" : "草稿"}
-              </span>
-              <span className="text-xs text-zinc-700">
-                {new Date(article.updated_at).toLocaleDateString("zh-TW")}
+                {contentStatusLabels[item.status]}
               </span>
             </Link>
           ))
         ) : (
-          <div className="p-14 text-center">
-            <FileText className="mx-auto size-6 text-zinc-700" />
-            <p className="mt-4 text-sm text-zinc-600">還沒有文章。</p>
+          <div className="p-10 text-center text-sm text-zinc-700">
+            還沒有內容，先新增第一篇報導。
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
