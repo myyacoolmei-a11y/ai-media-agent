@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
+import { displayCategory } from "@/lib/content/categories";
 import { formatStoryDate } from "@/lib/content/dates";
 import { getPreviewDemoContentItems } from "@/lib/content/preview-demo";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
@@ -52,7 +53,7 @@ export default async function AdminContentListPage() {
             <Link
               key={item.id}
               href={`/admin/content/${item.id}/edit`}
-              className="grid gap-2 border-b border-white/[0.06] p-5 last:border-0 hover:bg-white/[0.025] sm:grid-cols-[1fr_70px_90px_90px_120px] sm:items-center"
+              className="grid gap-2 border-b border-white/[0.06] p-5 last:border-0 hover:bg-white/[0.025] sm:grid-cols-[1fr_140px_90px_90px_120px] sm:items-center"
             >
               <div>
                 <p className="text-sm text-zinc-200">
@@ -63,7 +64,7 @@ export default async function AdminContentListPage() {
                 </p>
               </div>
               <span className="text-xs text-zinc-600">
-                {item.category || "未分類"}
+                {displayCategory(item.category)}
               </span>
               <span className="text-xs text-zinc-600">
                 {contentTypeLabels[item.content_type]}

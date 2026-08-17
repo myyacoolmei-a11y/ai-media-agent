@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StoryVideo } from "@/components/public/story-video";
-import { displayCategory } from "@/lib/content/categories";
+import { categoryHref, displayCategory } from "@/lib/content/categories";
 import { formatStoryDate } from "@/lib/content/dates";
 import { getPublishedStory } from "@/lib/content/published";
 import { isVideoStory } from "@/lib/content/video";
@@ -32,15 +32,12 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   if (!story) notFound();
   const videoMedia = story.media.find((item) => item.type === "video" && item.url);
   const category = displayCategory(story.category);
-  const categoryHref =
-    story.category && story.category !== "未分類"
-      ? `/news?category=${encodeURIComponent(story.category)}`
-      : "/news";
+  const sectionHref = categoryHref(story.category);
 
   return (
     <article className="mx-auto max-w-3xl">
       <p className="text-xs text-[#d3b176]">
-        <Link href={categoryHref} className="hover:text-white">
+        <Link href={sectionHref} className="hover:text-white">
           {category}
         </Link>
         {isVideoStory(story) ? " · 影音" : ""} · {formatStoryDate(story.publishedAt)}

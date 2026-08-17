@@ -13,7 +13,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { DEFAULT_CATEGORY, MEDIA_CATEGORIES } from "@/lib/content/categories";
+import {
+  DEFAULT_CATEGORY,
+  MEDIA_SECTIONS,
+  composeCategory,
+  getSectionByLabel,
+  getSectionBySlug,
+  parseCategory,
+} from "@/lib/content/categories";
 import { toDatetimeLocalValue } from "@/lib/content/dates";
 import { createContentSlug, normalizeSlug } from "@/lib/content/slug";
 import { normalizeVideoUrl } from "@/lib/content/video";
@@ -465,31 +472,12 @@ export function ContentForm({
                 className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
               />
             </label>
-            <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
-              <span className="text-xs text-zinc-400">新聞分類</span>
-              <select
-                value={article.category}
-                onChange={(event) =>
-                  setArticle((current) => ({
-                    ...current,
-                    category: event.target.value,
-                  }))
-                }
-                className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
-              >
-                {MEDIA_CATEGORIES.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-                {article.category &&
-                !(MEDIA_CATEGORIES as readonly string[]).includes(
-                  article.category,
-                ) ? (
-                  <option value={article.category}>{article.category}</option>
-                ) : null}
-              </select>
-            </label>
+            <CategoryFields
+              value={article.category}
+              onChange={(category) =>
+                setArticle((current) => ({ ...current, category }))
+              }
+            />
             <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
               <span className="text-xs text-zinc-400">內容類型</span>
               <select
@@ -559,5 +547,72 @@ export function ContentForm({
         </label>
       </div>
     </div>
+  );
+}
+
+function CategoryFields({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (category: string) => void;
+}) {
+  const parsed = parseCategory(value);
+  const section =
+    getSectionByLabel(parsed.section) ?? getSectionBySlug("local") ?? MEDIA_SECTIONS[0];
+  const selectedTopic =
+    section.topics.find((topic) => topic.label === parsed.topic) ?? null;
+  const known = Boolean(getSectionByLabel(parsed.section));
+
+  return (
+    <>
+      <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+        <span className="text-xs text-zinc-400">主分類</span>
+        <select
+          value={section.slug}
+          onChange={(event) => {
+            const next = getSectionBySlug(event.target.value);
+            if (!next) return;
+            onChange(composeCategory(next.label));
+          }}
+          className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+        >
+          {MEDIA_SECTIONS.map((item) => (
+            <option key={item.slug} value={item.slug}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        {!known && value ? (
+          <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+            原分類「{value}」會在儲存時改為所選主分類。
+          </p>
+        ) : null}
+      </label>
+      <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+        <span className="text-xs text-zinc-400">次分類</span>
+        {section.topics.length ? (
+          <select
+            value={selectedTopic?.slug ?? ""}
+            onChange={(event) => {
+              const topic = section.topics.find(
+                (item) => item.slug === event.target.value,
+              );
+              onChange(composeCategory(section.label, topic?.label));
+            }}
+            className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+          >
+            <option value="">不指定次分類</option>
+            {section.topics.map((item) => (
+              <option key={item.slug} value={item.slug}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <p className="mt-4 text-sm text-zinc-500">此主分類目前沒有次分類。</p>
+        )}
+      </label>
+    </>
   );
 }

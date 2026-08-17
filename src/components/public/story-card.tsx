@@ -52,7 +52,7 @@ export function StoryCard({
   rank,
 }: {
   story: PublicContentItem;
-  variant?: "grid" | "row" | "featured" | "hero" | "ranking" | "video";
+  variant?: "grid" | "row" | "featured" | "hero" | "ranking" | "video" | "people";
   rank?: number;
 }) {
   const href = `/article/${story.slug}`;
@@ -111,6 +111,29 @@ export function StoryCard({
             className="size-[4.25rem] shrink-0 object-cover"
           />
         ) : null}
+      </Link>
+    );
+  }
+
+  if (variant === "people") {
+    return (
+      <Link href={href} className="group block">
+        <Cover story={story} className="aspect-[4/5] sm:aspect-[3/4]" />
+        <div className="pt-4">
+          <p className="text-[11px] tracking-[0.12em] text-[#d3b176]">
+            {category}
+            <span className="mx-1.5 text-zinc-700">·</span>
+            {formatStoryDate(story.publishedAt)}
+          </p>
+          <h2 className="mt-2 font-[family-name:var(--font-news-serif)] text-[1.35rem] leading-8 tracking-[-0.03em] text-white group-hover:text-[#f4efe6] sm:text-[1.5rem] sm:leading-9">
+            {story.title}
+          </h2>
+          {story.summary ? (
+            <p className="mt-3 line-clamp-3 text-sm leading-7 text-zinc-500">
+              {story.summary}
+            </p>
+          ) : null}
+        </div>
       </Link>
     );
   }

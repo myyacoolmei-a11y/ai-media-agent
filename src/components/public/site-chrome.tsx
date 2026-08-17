@@ -1,16 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import { AccountMenu } from "@/components/account-menu";
-import { publicNavItems } from "@/lib/content/categories";
+import { CATEGORY_PAGES, publicNavItems } from "@/lib/content/categories";
 import { cn } from "@/lib/utils";
 
 export function PublicHeader() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const activeCategory = searchParams.get("category");
   const today = new Date().toLocaleDateString("zh-TW", {
     year: "numeric",
     month: "long",
@@ -27,7 +25,7 @@ export function PublicHeader() {
             AI Media
           </span>
           <span className="mt-1.5 block text-[10px] tracking-[0.22em] text-zinc-500">
-            即時新聞 · 深度報導
+            地方 · 人物 · 企業 · 生活
           </span>
         </Link>
         <div className="ml-auto flex items-center gap-4">
@@ -38,24 +36,18 @@ export function PublicHeader() {
         </div>
       </div>
       <nav className="border-t border-white/[0.07]">
-        <div className="no-scrollbar mx-auto flex max-w-7xl gap-0 overflow-x-auto px-2 sm:px-6">
+        <div className="no-scrollbar mx-auto flex max-w-7xl gap-0 overflow-x-auto overscroll-x-contain px-2 sm:px-4 lg:overflow-visible lg:px-6">
           {publicNavItems.map((item) => {
             const active =
               item.href === "/"
                 ? pathname === "/"
-                : item.href === "/news"
-                  ? pathname === "/news" && !activeCategory
-                  : item.href === "/video"
-                    ? pathname.startsWith("/video")
-                    : pathname === "/news" &&
-                      "category" in item &&
-                      activeCategory === item.category;
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "shrink-0 border-b-2 px-3 py-3 text-[13px] tracking-wide transition sm:px-4 sm:text-sm",
+                  "shrink-0 whitespace-nowrap border-b-2 px-2.5 py-3 text-[13px] tracking-wide transition sm:px-3.5 sm:text-sm lg:px-4",
                   active
                     ? "border-[#d3b176] text-white"
                     : "border-transparent text-zinc-500 hover:text-zinc-200",
@@ -74,12 +66,28 @@ export function PublicHeader() {
 export function PublicFooter() {
   return (
     <footer className="border-t border-white/[0.08]">
-      <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-10 text-xs text-zinc-600 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <p className="font-[family-name:var(--font-news-serif)] text-sm tracking-wide text-zinc-400">
-          AI Media
-        </p>
-        <p>前台僅顯示已發布內容</p>
-        <p>© {new Date().getFullYear()}</p>
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 text-xs text-zinc-600 sm:px-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-[family-name:var(--font-news-serif)] text-sm tracking-wide text-zinc-400">
+            AI Media
+          </p>
+          <p>前台僅顯示已發布內容</p>
+          <p>© {new Date().getFullYear()}</p>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          {CATEGORY_PAGES.map((section) => (
+            <Link
+              key={section.slug}
+              href={section.href}
+              className="hover:text-zinc-300"
+            >
+              {section.label}
+            </Link>
+          ))}
+          <Link href="/video" className="hover:text-zinc-300">
+            影音
+          </Link>
+        </div>
       </div>
     </footer>
   );
