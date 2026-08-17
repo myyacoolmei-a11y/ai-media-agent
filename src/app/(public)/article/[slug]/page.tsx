@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StoryVideo } from "@/components/public/story-video";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/brand";
 import { categoryHref, displayCategory } from "@/lib/content/categories";
 import { formatStoryDate } from "@/lib/content/dates";
 import { getPublishedStory } from "@/lib/content/published";
@@ -23,6 +24,18 @@ export async function generateMetadata({
   return {
     title: story.title,
     description: story.summary || undefined,
+    openGraph: {
+      title: story.title,
+      description: story.summary || SITE_DESCRIPTION,
+      siteName: SITE_NAME,
+      locale: "zh_TW",
+      type: "article",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: story.title,
+      description: story.summary || SITE_DESCRIPTION,
+    },
   };
 }
 

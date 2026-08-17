@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AccountMenu } from "@/components/account-menu";
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/brand";
 import { CATEGORY_PAGES, publicNavItems } from "@/lib/content/categories";
 import { cn } from "@/lib/utils";
 
@@ -20,12 +21,12 @@ export function PublicHeader() {
     <header className="border-b border-white/[0.08] bg-[#080708]/95 backdrop-blur">
       <div className="h-[3px] bg-gradient-to-r from-[#d3b176] via-[#e2b8bd] to-[#d3b176]" />
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-8 sm:py-5">
-        <Link href="/" aria-label="AI Media 首頁" className="min-w-0 shrink-0">
-          <span className="block font-[family-name:var(--font-news-serif)] text-[1.65rem] leading-none tracking-[-0.04em] text-white sm:text-[1.85rem]">
-            AI Media
+        <Link href="/" aria-label={`${SITE_NAME}首頁`} className="shrink-0">
+          <span className="block whitespace-nowrap font-[family-name:var(--font-news-serif)] text-[1.4rem] leading-none tracking-[-0.03em] text-white sm:text-[1.75rem]">
+            {SITE_NAME}
           </span>
           <span className="mt-1.5 block text-[10px] tracking-[0.22em] text-zinc-500">
-            地方 · 人物 · 企業 · 生活
+            {SITE_TAGLINE}
           </span>
         </Link>
         <div className="ml-auto flex items-center gap-4">
@@ -68,8 +69,8 @@ export function PublicFooter() {
     <footer className="border-t border-white/[0.08]">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 text-xs text-zinc-600 sm:px-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-[family-name:var(--font-news-serif)] text-sm tracking-wide text-zinc-400">
-            AI Media
+          <p className="whitespace-nowrap font-[family-name:var(--font-news-serif)] text-sm tracking-wide text-zinc-400">
+            {SITE_NAME}
           </p>
           <p>前台僅顯示已發布內容</p>
           <p>© {new Date().getFullYear()}</p>

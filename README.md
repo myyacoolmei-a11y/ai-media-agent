@@ -1,6 +1,6 @@
-# AI Media Agent
+# NEWS風曝
 
-AI Media Agent 是一套個人風格養成系統與專屬 AI 剪片師。使用者可以建立多套
+NEWS風曝是媒體網站前台與內容後台。使用者可以建立多套
 Brand Style Profile；每個影片專案都必須指定一套風格，AI 會優先依照該 Profile
 產生逐字稿、內容企劃、文案與剪輯腳本。
 

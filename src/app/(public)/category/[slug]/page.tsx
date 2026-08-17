@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { EmptyStories, StoryCard } from "@/components/public/story-card";
+import { SITE_NAME } from "@/lib/brand";
 import {
   getSectionBySlug,
   getTopicBySlug,
@@ -33,7 +34,7 @@ export async function generateMetadata({
   const title = topic ? `${section.label} · ${topic.label}` : section.label;
   return {
     title,
-    description: `AI Media ${title}報導`,
+    description: `${SITE_NAME}${title}報導`,
   };
 }
 

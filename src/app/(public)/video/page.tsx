@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 
 import { EmptyStories, StoryCard } from "@/components/public/story-card";
+import { SITE_NAME } from "@/lib/brand";
 import { listPublishedStories } from "@/lib/content/published";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "影音報導",
-  description: "AI Media 已發布的影音報導。",
+  description: `${SITE_NAME}已發布的影音報導。`,
 };
 
 export default async function VideoPage() {

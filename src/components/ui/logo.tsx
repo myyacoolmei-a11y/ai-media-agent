@@ -1,10 +1,11 @@
 import { Sparkles } from "lucide-react";
 
+import { SITE_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 export function Logo({
   className,
-  wordmark = "AI Media Agent",
+  wordmark = SITE_NAME,
 }: {
   className?: string;
   wordmark?: string;
@@ -14,7 +15,7 @@ export function Logo({
       <span className="grid size-8 place-items-center rounded-xl border border-[#e2b8bd]/25 bg-[#e2b8bd]/10">
         <Sparkles className="size-4 text-[#e2b8bd]" />
       </span>
-      <span className="text-sm font-semibold tracking-[-0.02em] text-white">
+      <span className="whitespace-nowrap text-sm font-semibold tracking-[-0.02em] text-white">
         {wordmark}
       </span>
     </div>

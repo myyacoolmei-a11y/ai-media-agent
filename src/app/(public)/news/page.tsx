@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { EmptyStories, StoryCard } from "@/components/public/story-card";
+import { SITE_NAME } from "@/lib/brand";
 import { categoryHref } from "@/lib/content/categories";
 import { listPublishedStories } from "@/lib/content/published";
 
@@ -13,7 +14,7 @@ type NewsPageProps = {
 
 export const metadata: Metadata = {
   title: "最新報導",
-  description: "AI Media 已發布的最新報導列表。",
+  description: `${SITE_NAME}已發布的最新報導列表。`,
 };
 
 export default async function NewsPage({ searchParams }: NewsPageProps) {
