@@ -34,7 +34,7 @@ export async function generateMetadata({
   const title = topic ? `${section.label} · ${topic.label}` : section.label;
   return {
     title,
-    description: `${SITE_NAME}${title}報導`,
+    description: `${SITE_NAME}｜${title}報導`,
   };
 }
 

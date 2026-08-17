@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { safeInternalPath } from "@/lib/auth/paths";
+import { SITE_NAME } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "login" | "signup" | "forgot" | "reset";
@@ -14,7 +15,7 @@ type AuthMode = "login" | "signup" | "forgot" | "reset";
 const content = {
   login: {
     title: "管理員登入",
-    description: "登入後即可新增報導，並發布到媒體前台。",
+    description: `登入 ${SITE_NAME} 後台，即可新增報導並發布到前台。`,
     submit: "登入",
   },
   signup: {
@@ -152,6 +153,9 @@ export function AuthForm({
   return (
     <div className="mx-auto w-full max-w-md">
       <div className="mb-8 text-center">
+        <p className="mb-3 whitespace-nowrap font-[family-name:var(--font-news-serif)] text-lg tracking-[-0.03em] text-white">
+          {SITE_NAME}
+        </p>
         <h1 className="text-3xl font-semibold tracking-[-0.045em] text-white">
           {page.title}
         </h1>
