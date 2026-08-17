@@ -44,7 +44,7 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
         依發布時間排序，只顯示已正式發布的內容。
       </p>
       {stories.length ? (
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           {stories.map((story) => (
             <StoryCard key={story.slug} story={story} />
           ))}

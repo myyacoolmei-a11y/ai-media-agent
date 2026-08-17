@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
-  <rect width="1600" height="900" fill="#1a1410"/>
-  <rect x="0" y="620" width="1600" height="280" fill="#d3b176" opacity="0.18"/>
-  <circle cx="1280" cy="220" r="160" fill="#e2b8bd" opacity="0.16"/>
-  <text x="80" y="780" fill="#f4f4f5" font-size="64" font-family="Georgia, serif">Focus</text>
-</svg>

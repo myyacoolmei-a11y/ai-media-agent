@@ -25,10 +25,10 @@ export default async function VideoPage() {
         顯示含影片網址，或類型為影音的已發布內容。
       </p>
       {stories.length ? (
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {stories.map((story) => (
-            <StoryCard key={story.slug} story={story} />
-          ))}
+        <div className="mt-10 grid gap-8 sm:grid-cols-2">
+            {stories.map((story) => (
+              <StoryCard key={story.slug} story={story} variant="video" />
+            ))}
         </div>
       ) : (
         <div className="mt-10">
