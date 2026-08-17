@@ -108,7 +108,7 @@ export function AuthForm({
         const { error: authError } = await supabase.auth.updateUser({ password });
         if (authError) throw authError;
         setMessage("密碼已更新，正在返回內容製作頁。");
-        window.setTimeout(() => router.replace("/dashboard"), 800);
+        window.setTimeout(() => router.replace("/admin"), 800);
       }
     } catch (authError) {
       setError(

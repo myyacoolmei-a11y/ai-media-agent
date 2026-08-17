@@ -24,6 +24,26 @@ const nextConfig: NextConfig = {
         destination: "/admin/content/:id/edit",
         permanent: false,
       },
+      {
+        source: "/projects/new",
+        destination: "/admin/assistant/new",
+        permanent: false,
+      },
+      {
+        source: "/dashboard",
+        destination: "/admin",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/contents",
+        destination: "/admin/content",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/contents/new",
+        destination: "/admin/content/new",
+        permanent: false,
+      },
     ];
   },
 };

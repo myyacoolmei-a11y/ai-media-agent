@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StoryVideo } from "@/components/public/story-video";
+import { displayCategory } from "@/lib/content/categories";
 import { formatStoryDate } from "@/lib/content/dates";
 import { getPublishedStory } from "@/lib/content/published";
 import { isVideoStory } from "@/lib/content/video";
@@ -30,13 +31,21 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const story = await getPublishedStory(slug);
   if (!story) notFound();
   const videoMedia = story.media.find((item) => item.type === "video" && item.url);
+  const category = displayCategory(story.category);
+  const categoryHref =
+    story.category && story.category !== "未分類"
+      ? `/news?category=${encodeURIComponent(story.category)}`
+      : "/news";
 
   return (
     <article className="mx-auto max-w-3xl">
       <p className="text-xs text-[#d3b176]">
-        {isVideoStory(story) ? "影音報導" : "報導"} · {formatStoryDate(story.publishedAt)}
+        <Link href={categoryHref} className="hover:text-white">
+          {category}
+        </Link>
+        {isVideoStory(story) ? " · 影音" : ""} · {formatStoryDate(story.publishedAt)}
       </p>
-      <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-[-0.05em] sm:text-5xl">
+      <h1 className="mt-5 font-[family-name:var(--font-news-serif)] text-3xl leading-tight tracking-[-0.03em] sm:text-5xl">
         {story.title}
       </h1>
       {story.summary ? (
@@ -48,7 +57,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         <img
           src={story.coverImage}
           alt={story.title}
-          className="mt-10 aspect-[16/9] w-full rounded-3xl object-cover"
+          className="mt-10 aspect-[16/9] w-full rounded-2xl object-cover"
         />
       ) : null}
 
@@ -57,7 +66,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           <video
             src={videoMedia.url}
             controls
-            className="aspect-video w-full rounded-3xl bg-black"
+            className="aspect-video w-full rounded-2xl bg-black"
           />
         ) : null}
         {story.videoUrl ? (
@@ -71,7 +80,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         </div>
       ) : null}
 
-      <div className="mt-12 flex gap-4 text-xs text-zinc-600">
+      <div className="mt-12 flex flex-wrap gap-4 text-xs text-zinc-600">
         <Link href="/news" className="hover:text-white">
           返回最新報導
         </Link>

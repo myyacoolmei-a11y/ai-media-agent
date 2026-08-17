@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const nextParam = url.searchParams.get("next");
-  const next = nextParam?.startsWith("/") ? nextParam : "/dashboard";
+  const next = nextParam?.startsWith("/") ? nextParam : "/admin";
 
   if (code) {
     const supabase = await createClient();

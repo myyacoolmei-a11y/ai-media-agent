@@ -6,16 +6,23 @@ import type { ContentItem, PublicContentItem } from "@/types/content";
 export async function listPublishedStories(options: {
   limit?: number;
   videosOnly?: boolean;
+  category?: string;
 } = {}): Promise<PublicContentItem[]> {
   try {
     const limit = options.limit ?? 30;
-    const { data, error } = await createAdminClient()
+    let query = createAdminClient()
       .from("content_items")
       .select("*")
       .eq("status", "published")
       .lte("published_at", new Date().toISOString())
       .order("published_at", { ascending: false })
       .limit(options.videosOnly ? 80 : limit);
+
+    if (options.category) {
+      query = query.eq("category", options.category);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Failed to list published stories", error.message);

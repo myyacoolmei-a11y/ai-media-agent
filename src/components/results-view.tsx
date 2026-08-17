@@ -203,7 +203,7 @@ export function ResultsView({ projectId }: { projectId: string }) {
       setSaving("");
       return;
     }
-    router.push(`/dashboard/contents/${payload.content.id}/edit`);
+    router.push(`/admin/content/${payload.content.id}/edit`);
   }
 
   if (!data && !error) {

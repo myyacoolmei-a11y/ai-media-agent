@@ -20,12 +20,14 @@ Brand Style Profile；每個影片專案都必須指定一套風格，AI 會優�
 - `/admin/content` — 內容列表
 - `/admin/content/new` — 新增報導
 - `/admin/content/[id]/edit` — 編輯報導
+- `/admin/assistant` — AI 報導助手（影片上傳、語音辨識、畫面分析、文案、標題、SEO、Hashtag）
+- `/admin/assistant/new` — 開始 AI 製作
 
-舊網址會導向新路由：`/articles/[slug]`、`/admin/login`、`/admin/new`、`/admin/[id]/edit`。
+舊網址會導向新路由：`/articles/[slug]`、`/admin/login`、`/admin/new`、`/admin/[id]/edit`、`/projects/new`、`/dashboard`。
 
-既有 AI 製作與風格功能仍可使用：
+既有 AI 製作與風格功能仍保留，改從後台進入：
 
-- `/projects/new` — 建立專案與影片上傳
+- `/projects/new` 會導向 `/admin/assistant/new`
 - `/projects/[projectId]/processing` — 真實處理工作進度
 - `/projects/[projectId]/results` — 完整內容輸出
 - `/signup` — 建立帳號

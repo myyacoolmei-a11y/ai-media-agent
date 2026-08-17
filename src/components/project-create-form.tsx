@@ -640,7 +640,7 @@ export function ProjectCreateForm({
             type="button"
             variant="ghost"
             onClick={() =>
-              step === 0 ? router.push("/") : setStep((current) => current - 1)
+              step === 0 ? router.push("/admin/assistant") : setStep((current) => current - 1)
             }
           >
             <ArrowLeft className="size-4" />

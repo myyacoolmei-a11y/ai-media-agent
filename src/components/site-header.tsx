@@ -1,4 +1,4 @@
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { AccountMenu } from "@/components/account-menu";
@@ -16,11 +16,10 @@ export function SiteHeader({ compact = false }: { compact?: boolean }) {
         <nav className="flex items-center gap-1">
           <AccountMenu />
           <Link
-            href="/projects/new"
+            href="/admin"
             className={cn(buttonVariants({ size: "sm" }), "group")}
           >
-            <Plus className="size-3.5" />
-            開始製作
+            後台
             {!compact && (
               <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
             )}

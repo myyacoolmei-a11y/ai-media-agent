@@ -44,7 +44,7 @@ export default async function AdminContentListPage() {
             <Link
               key={item.id}
               href={`/admin/content/${item.id}/edit`}
-              className="grid gap-2 border-b border-white/[0.06] p-5 last:border-0 hover:bg-white/[0.025] sm:grid-cols-[1fr_90px_90px_120px] sm:items-center"
+              className="grid gap-2 border-b border-white/[0.06] p-5 last:border-0 hover:bg-white/[0.025] sm:grid-cols-[1fr_70px_90px_90px_120px] sm:items-center"
             >
               <div>
                 <p className="text-sm text-zinc-200">
@@ -54,6 +54,9 @@ export default async function AdminContentListPage() {
                   {item.summary || "尚未填寫摘要"}
                 </p>
               </div>
+              <span className="text-xs text-zinc-600">
+                {item.category || "未分類"}
+              </span>
               <span className="text-xs text-zinc-600">
                 {contentTypeLabels[item.content_type]}
               </span>

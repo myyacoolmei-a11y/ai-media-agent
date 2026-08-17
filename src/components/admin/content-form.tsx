@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { DEFAULT_CATEGORY, MEDIA_CATEGORIES } from "@/lib/content/categories";
 import { toDatetimeLocalValue } from "@/lib/content/dates";
 import { createContentSlug, normalizeSlug } from "@/lib/content/slug";
 import { normalizeVideoUrl } from "@/lib/content/video";
@@ -28,6 +29,7 @@ type FormState = {
   content: string;
   video_url: string;
   content_type: ContentType;
+  category: string;
   status: ContentItem["status"];
   cover_asset_id: string | null;
   cover_image: string | null;
@@ -42,6 +44,7 @@ function emptyForm(): FormState {
     content: "",
     video_url: "",
     content_type: "article",
+    category: DEFAULT_CATEGORY,
     status: "draft",
     cover_asset_id: null,
     cover_image: null,
@@ -58,6 +61,7 @@ function fromContent(content: ContentItem): FormState {
     content: content.content,
     video_url: content.video_url ?? "",
     content_type: content.content_type,
+    category: content.category || DEFAULT_CATEGORY,
     status: content.status,
     cover_asset_id: content.cover_asset_id,
     cover_image: content.cover_image ?? null,
@@ -96,7 +100,7 @@ export function ContentForm({
       summary: next.summary,
       content: next.content,
       videoUrl: normalizeVideoUrl(next.video_url),
-      category: "未分類",
+      category: next.category || DEFAULT_CATEGORY,
       contentType: next.content_type,
       styleProfileId: null,
       coverAssetId: next.cover_asset_id,
@@ -236,6 +240,7 @@ export function ContentForm({
           content: next.content,
           video_url: next.video_url,
           content_type: next.content_type,
+          category: next.category,
           published_at: next.published_at,
         };
         setCoverFile(null);
@@ -459,6 +464,31 @@ export function ContentForm({
                 placeholder="https://..."
                 className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
               />
+            </label>
+            <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+              <span className="text-xs text-zinc-400">新聞分類</span>
+              <select
+                value={article.category}
+                onChange={(event) =>
+                  setArticle((current) => ({
+                    ...current,
+                    category: event.target.value,
+                  }))
+                }
+                className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+              >
+                {MEDIA_CATEGORIES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+                {article.category &&
+                !(MEDIA_CATEGORIES as readonly string[]).includes(
+                  article.category,
+                ) ? (
+                  <option value={article.category}>{article.category}</option>
+                ) : null}
+              </select>
             </label>
             <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
               <span className="text-xs text-zinc-400">內容類型</span>

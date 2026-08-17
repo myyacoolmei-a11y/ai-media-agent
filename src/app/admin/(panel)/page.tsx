@@ -1,4 +1,4 @@
-import { ArrowRight, FileText, Plus, Send } from "lucide-react";
+import { ArrowRight, FileText, Plus, Send, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -57,6 +57,22 @@ export default async function AdminHomePage() {
           新增報導
         </Link>
       </div>
+
+      <Link
+        href="/admin/assistant"
+        className="mt-8 flex items-center justify-between gap-4 rounded-3xl border border-white/[0.08] bg-white/[0.025] p-5 hover:border-white/15"
+      >
+        <div className="flex items-start gap-3">
+          <Sparkles className="mt-0.5 size-4 text-[#d3b176]" />
+          <div>
+            <p className="text-sm font-medium">AI 報導助手</p>
+            <p className="mt-1 text-xs leading-6 text-zinc-500">
+              影片上傳、語音辨識、畫面分析、AI 文案、標題、SEO 與 Hashtag。
+            </p>
+          </div>
+        </div>
+        <ArrowRight className="size-4 shrink-0 text-zinc-600" />
+      </Link>
 
       <div className="mt-9 grid gap-3 sm:grid-cols-2">
         {[

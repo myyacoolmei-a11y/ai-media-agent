@@ -18,7 +18,9 @@ export default async function VideoPage() {
       <p className="text-[10px] uppercase tracking-[0.22em] text-[#d3b176]">
         Video
       </p>
-      <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em]">影音報導</h1>
+      <h1 className="mt-3 font-[family-name:var(--font-news-serif)] text-3xl tracking-[-0.03em] sm:text-4xl">
+        影音報導
+      </h1>
       <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-500">
         顯示含影片網址，或類型為影音的已發布內容。
       </p>
