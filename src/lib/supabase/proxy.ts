@@ -36,13 +36,20 @@ export async function updateSession(request: NextRequest) {
   }
 
   const pathname = request.nextUrl.pathname;
+  if (pathname === "/signup") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   const isAdminLogin = pathname === "/admin/login";
   const protectedPath =
     (pathname.startsWith("/admin") && !isAdminLogin) ||
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/projects") ||
     pathname.startsWith("/styles");
-  const authPath = isAdminLogin || pathname === "/login" || pathname === "/signup";
+  const authPath = isAdminLogin || pathname === "/login";
 
   if (protectedPath && !userId) {
     const url = request.nextUrl.clone();

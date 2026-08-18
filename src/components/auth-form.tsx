@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { safeInternalPath } from "@/lib/auth/paths";
+import { SITE_NAME } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "login" | "signup" | "forgot" | "reset";
@@ -14,7 +15,7 @@ type AuthMode = "login" | "signup" | "forgot" | "reset";
 const content = {
   login: {
     title: "管理員登入",
-    description: "登入後即可新增報導，並發布到媒體前台。",
+    description: `登入 ${SITE_NAME} 後台。不開放公開註冊，僅限管理員帳號。`,
     submit: "登入",
   },
   signup: {
@@ -37,7 +38,7 @@ const content = {
 export function AuthForm({
   mode,
   defaultNext = "/admin",
-  showAlternateAuth = true,
+  showAlternateAuth = false,
 }: {
   mode: AuthMode;
   defaultNext?: string;
@@ -92,20 +93,7 @@ export function AuthForm({
         router.replace(next);
         router.refresh();
       } else if (mode === "signup") {
-        const { data, error: authError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=/styles/new`,
-          },
-        });
-        if (authError) throw authError;
-        if (data.session) {
-          router.replace("/styles/new");
-          router.refresh();
-        } else {
-          setMessage("驗證信已寄出。請點擊信中的連結完成 Email 驗證。");
-        }
+        throw new Error("公開註冊已關閉。請使用管理員帳號登入，或透過忘記密碼重設。");
       } else if (mode === "forgot") {
         const { error: authError } = await supabase.auth.resetPasswordForEmail(
           email,
@@ -152,6 +140,9 @@ export function AuthForm({
   return (
     <div className="mx-auto w-full max-w-md">
       <div className="mb-8 text-center">
+        <p className="mb-3 whitespace-nowrap font-[family-name:var(--font-news-serif)] text-lg tracking-[-0.03em] text-white">
+          {SITE_NAME}
+        </p>
         <h1 className="text-3xl font-semibold tracking-[-0.045em] text-white">
           {page.title}
         </h1>

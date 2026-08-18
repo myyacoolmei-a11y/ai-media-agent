@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Noto_Serif_TC } from "next/font/google";
 import "./globals.css";
 
 import { PreviewBanner } from "@/components/preview-banner";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/brand";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,10 +23,23 @@ const newsSerif = Noto_Serif_TC({
 
 export const metadata: Metadata = {
   title: {
-    default: "AI Media",
-    template: "%s · AI Media",
+    default: SITE_NAME,
+    template: `%s · ${SITE_NAME}`,
   },
-  description: "AI Media 媒體網站：最新報導、影音報導與內容後台。",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+    siteName: SITE_NAME,
+    locale: "zh_TW",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({
