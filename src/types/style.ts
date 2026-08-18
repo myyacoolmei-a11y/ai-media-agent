@@ -32,6 +32,7 @@ export type BrandStyleInput = z.infer<typeof brandStyleInputSchema>;
 export type BrandStyleProfile = BrandStyleInput & {
   id: string;
   user_id: string;
+  brand_id?: string;
   created_at: string;
   updated_at: string;
 };

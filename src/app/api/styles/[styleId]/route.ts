@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { verifyStyleAccess } from "@/lib/style/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { brandStyleInputSchema } from "@/types/style";
 
@@ -19,39 +20,29 @@ const actionSchema = z.discriminatedUnion("action", [
 ]);
 
 export async function GET(_request: Request, context: RouteContext) {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return NextResponse.json({ error: "請先登入。" }, { status: 401 });
-  }
   const { styleId } = await context.params;
-  const supabase = createAdminClient();
-  const [styleQuery, feedbackQuery, suggestionsQuery] = await Promise.all([
-    supabase
-      .from("brand_style_profiles")
-      .select("*")
-      .eq("id", styleId)
-      .eq("user_id", user.id)
-      .single(),
-    supabase
+  const access = await verifyStyleAccess(styleId);
+  if (!access) {
+    return NextResponse.json({ error: "找不到此風格。" }, { status: 404 });
+  }
+  const [feedbackQuery, suggestionsQuery] = await Promise.all([
+    access.supabase
       .from("style_feedback")
       .select("*")
       .eq("style_profile_id", styleId)
-      .eq("user_id", user.id)
+      .eq("user_id", access.user.id)
       .order("created_at", { ascending: false })
       .limit(100),
-    supabase
+    access.supabase
       .from("preference_suggestions")
       .select("*")
       .eq("style_profile_id", styleId)
-      .eq("user_id", user.id)
+      .eq("user_id", access.user.id)
       .order("created_at", { ascending: false }),
   ]);
 
-  if (styleQuery.error || !styleQuery.data) {
-    return NextResponse.json({ error: "找不到此風格。" }, { status: 404 });
-  }
   return NextResponse.json({
-    style: styleQuery.data,
+    style: access.style,
     feedback: feedbackQuery.data ?? [],
     suggestions: suggestionsQuery.data ?? [],
   });
@@ -63,28 +54,23 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
   }
   const { styleId } = await context.params;
+  const access = await verifyStyleAccess(styleId);
+  if (!access) {
+    return NextResponse.json({ error: "找不到此風格。" }, { status: 404 });
+  }
   const payload = actionSchema.safeParse(await request.json());
   if (!payload.success) {
     return NextResponse.json({ error: "操作資料不正確。" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
-  const { data: existing } = await supabase
-    .from("brand_style_profiles")
-    .select("*")
-    .eq("id", styleId)
-    .eq("user_id", user.id)
-    .single();
-  if (!existing) {
-    return NextResponse.json({ error: "找不到此風格。" }, { status: 404 });
-  }
+  const existing = access.style;
 
   if (payload.data.action === "update") {
     const { data, error } = await supabase
       .from("brand_style_profiles")
       .update(payload.data.style)
       .eq("id", styleId)
-      .eq("user_id", user.id)
       .select("*")
       .single();
     if (error) {
@@ -100,6 +86,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       .insert({
         ...styleFields,
         user_id: user.id,
+        brand_id: existing.brand_id ?? access.context.brand.id,
         style_name: payload.data.styleName,
       })
       .select("*")

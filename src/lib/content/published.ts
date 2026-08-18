@@ -2,6 +2,7 @@ import { legacyLabelsForSection, storyMatchesTaxonomy } from "@/lib/content/cate
 import { listPreviewDemoStories, getPreviewDemoStory } from "@/lib/content/preview-demo";
 import { serializePublicContent } from "@/lib/content/public-query";
 import { isVideoStory } from "@/lib/content/video";
+import { FENGBAO_BRAND_ID } from "@/lib/brands/constants";
 import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ContentItem, PublicContentItem } from "@/types/content";
@@ -26,6 +27,7 @@ export async function listPublishedStories(
       .from("content_items")
       .select("*")
       .eq("status", "published")
+      .eq("brand_id", FENGBAO_BRAND_ID)
       .lte("published_at", new Date().toISOString())
       .order("published_at", { ascending: false })
       .limit(options.videosOnly || options.section ? 80 : limit);
@@ -76,6 +78,7 @@ export async function getPublishedStory(slug: string) {
       .from("content_items")
       .select("*")
       .eq("slug", slug)
+      .eq("brand_id", FENGBAO_BRAND_ID)
       .eq("status", "published")
       .lte("published_at", new Date().toISOString())
       .maybeSingle();

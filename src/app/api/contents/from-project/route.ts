@@ -23,7 +23,6 @@ export async function POST(request: Request) {
     .from("content_items")
     .select("*")
     .eq("project_id", payload.data.projectId)
-    .eq("user_id", access.user.id)
     .maybeSingle();
   if (existing) {
     return NextResponse.json({ content: existing });
@@ -32,7 +31,6 @@ export async function POST(request: Request) {
     .from("ai_results")
     .select("content")
     .eq("project_id", payload.data.projectId)
-    .eq("user_id", access.user.id)
     .order("version", { ascending: false })
     .limit(1)
     .single();
@@ -50,6 +48,7 @@ export async function POST(request: Request) {
     .insert({
       id,
       user_id: access.user.id,
+      brand_id: access.project.brand_id ?? access.context?.brand.id,
       project_id: payload.data.projectId,
       style_profile_id: access.project.style_profile_id,
       title: generated.data.titles[0],
@@ -70,12 +69,40 @@ export async function POST(request: Request) {
     .from("media")
     .select("*")
     .eq("project_id", payload.data.projectId)
-    .eq("user_id", access.user.id)
     .order("created_at", { ascending: true });
+  try {
+    const { generateSocialCopy } = await import("@/lib/social/copy");
+    const { upsertSocialDraft } = await import("@/lib/social/store");
+    const copy = await generateSocialCopy({
+      title: generated.data.titles[0],
+      summary: generated.data.summary.join(" "),
+      content: preferred?.content ?? "",
+      slug: `content-${id.slice(0, 8)}`,
+      hashtags: generated.data.hashtags,
+      seoKeywords: generated.data.hashtags.join(" "),
+      hasVideo: true,
+    });
+    for (const platform of ["facebook", "instagram", "threads", "tiktok"] as const) {
+      const text = copy[platform];
+      if (!text) continue;
+      await upsertSocialDraft({
+        userId: access.user.id,
+        brandId: access.project.brand_id ?? access.context?.brand.id,
+        contentId: id,
+        platform,
+        socialText: text,
+        status: "draft",
+      });
+    }
+  } catch (socialError) {
+    console.error("Failed to seed social drafts", socialError);
+  }
+
   if (projectMedia?.length) {
     await access.supabase.from("content_assets").insert(
       projectMedia.map((media, index) => ({
         user_id: access.user.id,
+        brand_id: access.project.brand_id ?? access.context?.brand.id,
         content_item_id: id,
         asset_type:
           media.type === "image"

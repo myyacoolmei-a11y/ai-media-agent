@@ -50,6 +50,7 @@ export async function POST(request: Request, context: RouteContext) {
     .insert({
       id: assetId,
       user_id: access.user.id,
+      brand_id: access.content.brand_id ?? access.context?.brand.id,
       content_item_id: contentId,
       asset_type: payload.data.assetType,
       status: "pending",

@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { requireBrandContext } from "@/lib/brands/access";
 import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { getProviderStatus } from "@/lib/providers/config";
 import { SupabaseMediaStorageProvider } from "@/lib/providers/supabase-storage";
@@ -17,10 +17,11 @@ const allowedVideoTypes = new Set([
 
 export async function POST(request: Request) {
   if (isPreviewDemo()) return previewWriteBlocked();
-  const user = await getAuthenticatedUser();
-  if (!user) {
+  const context = await requireBrandContext();
+  if (!context) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
   }
+  const user = context.user;
   const providerStatus = getProviderStatus();
   if (!providerStatus.configured) {
     return NextResponse.json(
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     .from("brand_style_profiles")
     .select("id,style_name")
     .eq("id", parsed.data.styleProfileId)
-    .eq("user_id", user.id)
+    .eq("brand_id", context.brand.id)
     .single();
   if (!styleProfile) {
     return NextResponse.json(
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
   const { error: projectError } = await supabase.from("projects").insert({
     id: projectId,
     user_id: user.id,
+    brand_id: context.brand.id,
     style_profile_id: styleProfile.id,
     name: parsed.data.file.name,
     description: brief.originalRequest,
@@ -91,6 +93,7 @@ export async function POST(request: Request) {
   const { error: mediaError } = await supabase.from("media").insert({
     id: mediaId,
     user_id: user.id,
+    brand_id: context.brand.id,
     project_id: projectId,
     type: "video",
     file_name: parsed.data.file.name,

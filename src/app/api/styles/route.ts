@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireBrandContext } from "@/lib/brands/access";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -10,6 +11,10 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
   }
+  const context = await requireBrandContext();
+  if (!context) {
+    return NextResponse.json({ error: "沒有可存取的品牌。" }, { status: 403 });
+  }
   if (isPreviewDemo()) {
     return NextResponse.json({ styles: [] });
   }
@@ -17,7 +22,7 @@ export async function GET() {
   const { data, error } = await createAdminClient()
     .from("brand_style_profiles")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("brand_id", context.brand.id)
     .order("updated_at", { ascending: false });
 
   if (error) {
@@ -33,6 +38,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
   }
 
+  const context = await requireBrandContext();
+  if (!context) {
+    return NextResponse.json({ error: "沒有可存取的品牌。" }, { status: 403 });
+  }
+
   const payload = brandStyleInputSchema.safeParse(await request.json());
   if (!payload.success) {
     return NextResponse.json(
@@ -44,7 +54,7 @@ export async function POST(request: Request) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("brand_style_profiles")
-    .insert({ ...payload.data, user_id: user.id })
+    .insert({ ...payload.data, user_id: user.id, brand_id: context.brand.id })
     .select("*")
     .single();
 

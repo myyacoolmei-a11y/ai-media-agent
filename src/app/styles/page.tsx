@@ -3,22 +3,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { requireBrandContext } from "@/lib/brands/access";
 import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 import type { BrandStyleProfile } from "@/types/style";
 
 export default async function StylesPage() {
-  const user = await getAuthenticatedUser();
-  if (!user) redirect("/login?next=/styles");
+  const context = await requireBrandContext();
+  if (!context) redirect("/login?next=/styles");
 
   let styles: BrandStyleProfile[] = [];
   if (!isPreviewDemo()) {
     const { data } = await createAdminClient()
       .from("brand_style_profiles")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("brand_id", context.brand.id)
       .order("updated_at", { ascending: false });
     styles = (data ?? []) as BrandStyleProfile[];
   }
@@ -34,7 +34,7 @@ export default async function StylesPage() {
             我的品牌風格
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-500">
-            為不同品牌與內容情境建立多套風格，讓每次產出都更接近你。
+            為不同內容情境建立多套風格，讓每次產出都更接近你。
           </p>
         </div>
         <Link href="/styles/new" className={buttonVariants()}>

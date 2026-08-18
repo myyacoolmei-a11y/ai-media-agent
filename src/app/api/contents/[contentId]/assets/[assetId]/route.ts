@@ -33,7 +33,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     })
     .eq("id", assetId)
     .eq("content_item_id", contentId)
-    .eq("user_id", access.user.id)
     .select("*")
     .single();
   if (error) {
@@ -55,7 +54,6 @@ export async function DELETE(_request: Request, context: RouteContext) {
     .select("*")
     .eq("id", assetId)
     .eq("content_item_id", contentId)
-    .eq("user_id", access.user.id)
     .single();
   if (!asset) {
     return NextResponse.json({ error: "找不到媒體資料。" }, { status: 404 });
@@ -67,8 +65,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   const { error } = await access.supabase
     .from("content_assets")
     .delete()
-    .eq("id", assetId)
-    .eq("user_id", access.user.id);
+    .eq("id", assetId);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

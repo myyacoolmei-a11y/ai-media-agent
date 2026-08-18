@@ -32,10 +32,12 @@ export async function verifyProjectAccess(projectId: string) {
     .from("projects")
     .select("*")
     .eq("id", projectId)
-    .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   if (error || !project) return null;
+  const { getBrandContext } = await import("@/lib/brands/access");
+  const context = await getBrandContext(user);
+  if (!context?.brands.some((brand) => brand.id === project.brand_id)) return null;
 
-  return { supabase, project, user };
+  return { supabase, project, user, context };
 }

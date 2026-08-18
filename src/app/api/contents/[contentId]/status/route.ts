@@ -49,6 +49,7 @@ export async function POST(request: Request, context: RouteContext) {
     .from("content_revisions")
     .insert({
       user_id: access.user.id,
+      brand_id: access.content.brand_id,
       content_item_id: contentId,
       version,
       snapshot: access.content,
@@ -70,7 +71,6 @@ export async function POST(request: Request, context: RouteContext) {
           : access.content.published_at,
     })
     .eq("id", contentId)
-    .eq("user_id", access.user.id)
     .select("*")
     .single();
   if (error) {

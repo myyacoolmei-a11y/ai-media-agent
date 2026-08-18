@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { parseOptionalIsoDate } from "@/lib/content/dates";
 import { getPreviewDemoContentItems } from "@/lib/content/preview-demo";
+import { requireBrandContext } from "@/lib/brands/access";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -17,6 +18,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
   }
 
+  const context = await requireBrandContext();
+  if (!context) {
+    return NextResponse.json({ error: "沒有可存取的品牌。" }, { status: 403 });
+  }
+
   if (isPreviewDemo()) {
     return NextResponse.json({ contents: getPreviewDemoContentItems() });
   }
@@ -30,7 +36,7 @@ export async function GET(request: Request) {
     .select(
       "id,title,slug,summary,category,content_type,status,published_at,updated_at,cover_asset_id",
     )
-    .eq("user_id", user.id)
+    .eq("brand_id", context.brand.id)
     .order("updated_at", { ascending: false });
 
   if (status.success) query = query.eq("status", status.data);
@@ -49,6 +55,11 @@ export async function POST(request: Request) {
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
+  }
+
+  const context = await requireBrandContext();
+  if (!context) {
+    return NextResponse.json({ error: "沒有可存取的品牌。" }, { status: 403 });
   }
 
   const payload = contentInputSchema.safeParse(await request.json());
@@ -70,7 +81,7 @@ export async function POST(request: Request) {
       .from("brand_style_profiles")
       .select("id")
       .eq("id", payload.data.styleProfileId)
-      .eq("user_id", user.id)
+      .eq("brand_id", context.brand.id)
       .maybeSingle();
     if (!style) {
       return NextResponse.json({ error: "品牌風格不存在。" }, { status: 400 });
@@ -81,6 +92,7 @@ export async function POST(request: Request) {
     .from("content_items")
     .insert({
       user_id: user.id,
+      brand_id: context.brand.id,
       title: payload.data.title,
       slug: payload.data.slug,
       summary: payload.data.summary,
