@@ -3,6 +3,7 @@ import {
   FilePlus2,
   Files,
   Home,
+  Share2,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -15,6 +16,7 @@ const navigation = [
   { href: "/admin/content", label: "內容管理", icon: Files },
   { href: "/admin/content/new", label: "新增報導", icon: FilePlus2 },
   { href: "/admin/assistant", label: "AI 報導助手", icon: Sparkles },
+  { href: "/admin/social", label: "社群發布", icon: Share2 },
 ];
 
 export function AdminHeader() {

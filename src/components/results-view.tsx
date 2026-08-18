@@ -187,8 +187,23 @@ export function ResultsView({ projectId }: { projectId: string }) {
   }
 
   async function createContentDraft() {
+    if (!result || !data) return;
     setSaving("import");
     setError("");
+    const selectedCopy =
+      result.copyVariants.find(
+        (variant) => variant.id === data.project.selectedCopyVersion,
+      ) ?? result.copyVariants[0];
+    const { writeAssistantHandoffDraft } = await import(
+      "@/lib/social/assistant-draft"
+    );
+    writeAssistantHandoffDraft({
+      title: result.titles[0] ?? "",
+      summary: result.summary.join(" "),
+      content: selectedCopy?.content ?? "",
+      hashtags: result.hashtags,
+      seoKeywords: result.hashtags.join(" "),
+    });
     const response = await fetch("/api/contents/from-project", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -198,12 +213,16 @@ export function ResultsView({ projectId }: { projectId: string }) {
       content?: { id: string };
       error?: string;
     };
-    if (!response.ok || !payload.content) {
-      setError(payload.error || "無法建立內容草稿。");
-      setSaving("");
+    if (response.ok && payload.content) {
+      router.push(`/admin/content/${payload.content.id}/edit?from=assistant`);
       return;
     }
-    router.push(`/admin/content/${payload.content.id}/edit`);
+    if (response.status === 403) {
+      router.push("/admin/content/new?from=assistant");
+      return;
+    }
+    setError(payload.error || "無法送到內容編輯器。");
+    setSaving("");
   }
 
   if (!data && !error) {
@@ -261,7 +280,7 @@ export function ResultsView({ projectId }: { projectId: string }) {
             {saving === "import" && (
               <LoaderCircle className="size-4 animate-spin" />
             )}
-            建立內容草稿
+            送到內容編輯器
           </Button>
         </div>
       </header>
