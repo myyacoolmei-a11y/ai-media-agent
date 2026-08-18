@@ -86,6 +86,12 @@ export default function AssistantPage() {
           品牌風格
         </Link>
         <Link
+          href="/admin/social"
+          className="rounded-full border border-white/10 px-4 py-2 text-zinc-400 hover:text-white"
+        >
+          社群發布
+        </Link>
+        <Link
           href="/admin/content"
           className="rounded-full border border-white/10 px-4 py-2 text-zinc-400 hover:text-white"
         >

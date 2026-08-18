@@ -87,6 +87,19 @@ export default async function AdminHomePage() {
         <ArrowRight className="size-4 shrink-0 text-zinc-600" />
       </Link>
 
+      <Link
+        href="/admin/social"
+        className="mt-3 flex items-center justify-between gap-4 rounded-3xl border border-white/[0.08] bg-white/[0.025] p-5 hover:border-white/15"
+      >
+        <div>
+          <p className="text-sm font-medium">社群發布</p>
+          <p className="mt-1 text-xs leading-6 text-zinc-500">
+            查看 Facebook / Instagram / Threads / TikTok 各自的發布狀態與錯誤。
+          </p>
+        </div>
+        <ArrowRight className="size-4 shrink-0 text-zinc-600" />
+      </Link>
+
       <div className="mt-9 grid gap-3 sm:grid-cols-2">
         {[
           ["草稿", draftCount, FileText],

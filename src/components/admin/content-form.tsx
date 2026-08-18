@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { SocialSyncPanel } from "@/components/admin/social-sync-panel";
 import { Button } from "@/components/ui/button";
 import {
   DEFAULT_CATEGORY,
@@ -24,6 +25,10 @@ import {
 import { toDatetimeLocalValue } from "@/lib/content/dates";
 import { createContentSlug, normalizeSlug } from "@/lib/content/slug";
 import { normalizeVideoUrl } from "@/lib/content/video";
+import {
+  clearAssistantHandoffDraft,
+  readAssistantHandoffDraft,
+} from "@/lib/social/assistant-draft";
 import { createClient } from "@/lib/supabase/client";
 import type { ContentItem, ContentType } from "@/types/content";
 import { contentTypeLabels } from "@/types/content";
@@ -93,6 +98,27 @@ export function ContentForm({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [seoKeywords, setSeoKeywords] = useState("");
+  const [hashtagsText, setHashtagsText] = useState("");
+
+  useEffect(() => {
+    const draft = readAssistantHandoffDraft();
+    if (!draft) return;
+    const apply = () => {
+      setArticle((current) => ({
+        ...current,
+        title: current.title || draft.title,
+        summary: current.summary || draft.summary,
+        content: current.content || draft.content,
+        video_url: current.video_url || draft.videoUrl || "",
+      }));
+      setHashtagsText((current) => current || draft.hashtags.join(" "));
+      setSeoKeywords((current) => current || draft.seoKeywords);
+      clearAssistantHandoffDraft();
+    };
+    const timer = window.setTimeout(apply, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -545,6 +571,39 @@ export function ContentForm({
             className="editor-input font-mono text-xs"
           />
         </label>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+            <span className="text-xs text-zinc-400">SEO 關鍵字</span>
+            <input
+              value={seoKeywords}
+              onChange={(event) => setSeoKeywords(event.target.value)}
+              placeholder="用逗號或空白分隔"
+              className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+            />
+            <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+              不會直接出現在公開首頁，會作為社群文案改寫參考。
+            </p>
+          </label>
+          <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+            <span className="text-xs text-zinc-400">Hashtag</span>
+            <input
+              value={hashtagsText}
+              onChange={(event) => setHashtagsText(event.target.value)}
+              placeholder="#地方 #人物"
+              className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+            />
+          </label>
+        </div>
+
+        <SocialSyncPanel
+          article={article}
+          seoKeywords={seoKeywords}
+          hashtags={hashtagsText
+            .split(/[\s,，]+/)
+            .map((tag) => tag.trim())
+            .filter(Boolean)}
+        />
       </div>
     </div>
   );
