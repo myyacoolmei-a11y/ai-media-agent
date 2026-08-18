@@ -50,7 +50,6 @@ export async function PUT(request: Request, context: RouteContext) {
         platform,
         socialText: text,
         mediaUrl,
-        status: payload.data.selected.includes(platform) ? "queued" : "draft",
       }),
     );
   }

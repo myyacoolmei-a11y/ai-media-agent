@@ -97,14 +97,17 @@ export async function upsertSocialDraft(input: {
     .maybeSingle();
 
   if (existing?.id) {
+    const patch: Record<string, unknown> = {
+      social_text: input.socialText,
+      media_url: input.mediaUrl ?? null,
+    };
+    if (input.status) {
+      patch.status = input.status;
+      if (input.status !== "failed") patch.error_message = null;
+    }
     const { data, error } = await supabase
       .from("social_publications")
-      .update({
-        social_text: input.socialText,
-        media_url: input.mediaUrl ?? null,
-        status: input.status ?? "draft",
-        error_message: input.status === "failed" ? undefined : null,
-      })
+      .update(patch)
       .eq("id", existing.id)
       .select("*")
       .single();

@@ -19,8 +19,12 @@ export async function GET() {
       connected: status.connected,
       label: socialPlatformLabels[publisher.platform],
       reason: status.connected
-        ? status.accountName ?? null
+        ? status.accountName ?? "已連線"
         : status.reason ?? "尚未連線",
+      state: status.state,
+      adapter: "official_api",
+      accountName: status.accountName ?? null,
+      missingEnv: status.missingEnv ?? [],
     });
   }
   return NextResponse.json({ connections });

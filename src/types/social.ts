@@ -37,11 +37,21 @@ export type SocialPublication = {
   content_title?: string;
 };
 
+export type SocialConnectionState =
+  | "connected"
+  | "credentials_missing"
+  | "permission_missing"
+  | "error";
+
 export type SocialConnection = {
   platform: SocialPlatform;
   connected: boolean;
   label: string;
   reason: string | null;
+  state: SocialConnectionState;
+  adapter: "official_api";
+  accountName: string | null;
+  missingEnv: string[];
 };
 
 export type SocialCopySet = {
@@ -65,14 +75,14 @@ export const socialCopyRequestSchema = z.object({
 
 export const socialDraftsSchema = z.object({
   contentId: z.string().min(1),
-  selected: z.array(socialPlatformSchema).max(4),
+  selected: z.array(socialPlatformSchema).max(4).optional().default([]),
   drafts: z.object({
     facebook: z.string().max(8000).optional(),
     instagram: z.string().max(4000).optional(),
     threads: z.string().max(2000).optional(),
     tiktok: z.string().max(4000).optional(),
   }),
-  mediaUrl: z.string().url().nullable().optional(),
+  mediaUrl: z.string().max(2000).nullable().optional(),
 });
 
 export const socialPublishRequestSchema = z.object({

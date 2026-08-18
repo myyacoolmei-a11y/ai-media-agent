@@ -19,7 +19,7 @@ const bodySchema = z.object({
       tiktok: z.string().max(4000).optional(),
     })
     .optional(),
-  mediaUrl: z.string().url().nullable().optional(),
+  mediaUrl: z.string().max(2000).nullable().optional(),
 });
 
 export async function POST(request: Request, context: RouteContext) {
@@ -47,7 +47,10 @@ export async function POST(request: Request, context: RouteContext) {
         content: access.content,
         platform,
         text: payload.data.drafts?.[platform] ?? "",
-        mediaUrl: payload.data.mediaUrl ?? access.content.cover_image,
+        mediaUrl:
+          payload.data.mediaUrl ??
+          access.content.video_url ??
+          access.content.cover_image,
       }),
     );
   }

@@ -1,4 +1,4 @@
-import type { SocialPlatform } from "@/types/social";
+import type { SocialConnectionState, SocialPlatform } from "@/types/social";
 
 export type SocialPublishInput = {
   text: string;
@@ -19,6 +19,8 @@ export type SocialPublisherConnection = {
   connected: boolean;
   accountName?: string | null;
   reason?: string | null;
+  state: SocialConnectionState;
+  missingEnv?: string[];
 };
 
 export interface SocialPublisher {

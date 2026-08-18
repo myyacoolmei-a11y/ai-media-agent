@@ -1,12 +1,13 @@
 "use client";
 
-import { LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { LoaderCircle, RefreshCw, Send, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { SITE_NAME } from "@/lib/brand";
 import {
   SOCIAL_PLATFORMS,
+  socialConnectionStateLabels,
   socialPlatformLabels,
   socialStatusLabels,
 } from "@/lib/social/platforms";
@@ -26,22 +27,39 @@ const emptyCopy: SocialCopySet = {
   tiktok: "",
 };
 
+const copyHints: Record<SocialPlatform, string> = {
+  facebook: "較完整摘要＋CTA＋文章連結",
+  instagram: "較短、較有吸引力＋Hashtags",
+  threads: "口語、短句、觀點型",
+  tiktok: "短影音標題＋說明＋Hashtags",
+};
+
 export function SocialSyncPanel({
   article,
   seoKeywords,
   hashtags,
 }: {
-  article: ContentItem | { id?: string; title: string; summary: string; content: string; slug: string; status: string; cover_image?: string | null; video_url?: string | null; content_type?: string };
+  article: ContentItem | {
+    id?: string;
+    title: string;
+    summary: string;
+    content: string;
+    slug: string;
+    status: string;
+    cover_image?: string | null;
+    video_url?: string | null;
+    content_type?: string;
+  };
   seoKeywords: string;
   hashtags: string[];
 }) {
-  const [selected, setSelected] = useState<SocialPlatform[]>([]);
   const [copy, setCopy] = useState<SocialCopySet>(emptyCopy);
   const [publications, setPublications] = useState<SocialPublication[]>([]);
   const [connections, setConnections] = useState<SocialConnection[]>([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const hasVideo = Boolean(article.video_url) || article.content_type === "video";
+  const sitePublished = article.status === "published";
 
   useEffect(() => {
     void fetch("/api/social/status")
@@ -74,13 +92,9 @@ export function SocialSyncPanel({
     [connections],
   );
 
-  function toggle(platform: SocialPlatform) {
-    if (platform === "tiktok" && !hasVideo) return;
-    setSelected((current) =>
-      current.includes(platform)
-        ? current.filter((item) => item !== platform)
-        : [...current, platform],
-    );
+  function mediaUrlFor(platform: SocialPlatform) {
+    if (platform === "tiktok") return article.video_url || article.cover_image || null;
+    return article.cover_image || article.video_url || null;
   }
 
   async function generateCopy() {
@@ -105,19 +119,19 @@ export function SocialSyncPanel({
       if (!response.ok || !body.copy) {
         throw new Error(body.error || "無法產生社群文案。");
       }
-      setCopy({
+      const next = {
         facebook: body.copy.facebook,
         instagram: body.copy.instagram,
         threads: body.copy.threads,
         tiktok: body.copy.tiktok ?? "",
-      });
+      };
+      setCopy(next);
       if (article.id) {
         await fetch(`/api/contents/${article.id}/social`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            selected,
-            drafts: body.copy,
+            drafts: next,
             mediaUrl: article.cover_image ?? null,
           }),
         });
@@ -137,39 +151,38 @@ export function SocialSyncPanel({
     setPublications(body.publications ?? []);
   }
 
-  async function persistDrafts() {
+  async function persistPlatform(platform: SocialPlatform) {
     if (!article.id) return;
     await fetch(`/api/contents/${article.id}/social`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        selected,
-        drafts: copy,
-        mediaUrl: article.cover_image ?? null,
+        drafts: { [platform]: copy[platform] ?? "" },
+        mediaUrl: mediaUrlFor(platform),
       }),
     });
   }
 
-  async function publishSelected() {
+  async function publishPlatform(platform: SocialPlatform) {
     if (!article.id) {
       setError("請先儲存報導，再同步社群。");
       return;
     }
-    if (!selected.length) {
-      setError("請先勾選要同步的社群平台。");
+    if (!sitePublished) {
+      setError("請先發布 NEWS風曝，再同步社群。網站狀態不會因社群失敗而回滾。");
       return;
     }
-    setBusy("publish");
+    setBusy(`publish-${platform}`);
     setError("");
     try {
-      await persistDrafts();
+      await persistPlatform(platform);
       const response = await fetch(`/api/contents/${article.id}/social/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          platforms: selected,
-          drafts: copy,
-          mediaUrl: article.cover_image ?? null,
+          platforms: [platform],
+          drafts: { [platform]: copy[platform] ?? "" },
+          mediaUrl: mediaUrlFor(platform),
         }),
       });
       const body = (await response.json()) as { error?: string };
@@ -195,6 +208,7 @@ export function SocialSyncPanel({
       await reload();
     } catch (retryError) {
       setError(retryError instanceof Error ? retryError.message : "重新發布失敗。");
+      await reload();
     } finally {
       setBusy("");
     }
@@ -207,9 +221,9 @@ export function SocialSyncPanel({
           <p className="text-[10px] uppercase tracking-[0.2em] text-[#d3b176]">
             Social
           </p>
-          <h2 className="mt-2 text-lg font-medium">社群同步</h2>
+          <h2 className="mt-2 text-lg font-medium">同步發布</h2>
           <p className="mt-2 max-w-xl text-xs leading-6 text-zinc-500">
-            預設只發布 {SITE_NAME}。社群平台要另外勾選，網站發布成功或失敗都不會和社群綁在一起。
+            {SITE_NAME} 與各社群平台分開處理。單一平台失敗不會回滾網站文章。
           </p>
         </div>
         <Button
@@ -224,130 +238,189 @@ export function SocialSyncPanel({
           ) : (
             <Sparkles className="size-3.5" />
           )}
-          AI 產生各平台文案
+          AI 產生社群文案
         </Button>
       </div>
 
-      <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <label className="flex items-start gap-3 rounded-2xl border border-[#d3b176]/20 bg-[#d3b176]/[0.06] p-3">
-          <input type="checkbox" checked readOnly className="mt-1" />
-          <span>
-            <span className="block text-sm text-white">{SITE_NAME}</span>
-            <span className="mt-1 block text-[11px] text-zinc-500">
-              {article.status === "published" ? "已發布" : "將發布到網站"}
-            </span>
+      <div className="mt-5 rounded-2xl border border-[#d3b176]/20 bg-[#d3b176]/[0.06] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-white">{SITE_NAME}</p>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px]",
+              sitePublished
+                ? "bg-emerald-400/10 text-emerald-300"
+                : "bg-white/5 text-zinc-500",
+            )}
+          >
+            {sitePublished ? "已發布" : "尚未發布"}
           </span>
-        </label>
-        {SOCIAL_PLATFORMS.map((platform) => {
-          const connection = connectionByPlatform[platform];
-          const publication = publications.find((row) => row.platform === platform);
-          const disabled = platform === "tiktok" && !hasVideo;
-          return (
-            <label
-              key={platform}
-              className={cn(
-                "flex items-start gap-3 rounded-2xl border border-white/10 p-3",
-                disabled && "opacity-50",
-              )}
-            >
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={selected.includes(platform)}
-                disabled={disabled}
-                onChange={() => toggle(platform)}
-              />
-              <span className="min-w-0">
-                <span className="block text-sm text-white">
-                  {socialPlatformLabels[platform]}
-                </span>
-                <span className="mt-1 block text-[11px] text-zinc-500">
-                  {disabled
-                    ? "沒有影片，尚未啟用"
-                    : publication
-                      ? socialStatusLabels[publication.status]
-                      : selected.includes(platform)
-                        ? "已選擇，尚未發布"
-                        : connection?.connected
-                          ? "未選擇"
-                          : connection?.reason || "尚未連線"}
-                </span>
-              </span>
-            </label>
-          );
-        })}
+        </div>
+        <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+          請先發布網站文章，再按各平台的發布按鈕。不會因為網站發布就自動發到社群。
+        </p>
       </div>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
         {SOCIAL_PLATFORMS.map((platform) => {
-          if (platform === "tiktok" && !hasVideo && !copy.tiktok) return null;
-          const publication = publications.find((row) => row.platform === platform);
           const connection = connectionByPlatform[platform];
+          const publication = publications.find((row) => row.platform === platform);
+          const disabledTikTok = platform === "tiktok" && !hasVideo;
+          const connectionState = disabledTikTok
+            ? "permission_missing"
+            : connection?.state ?? "credentials_missing";
+          const connectionLabel = disabledTikTok
+            ? "沒有影片，尚未啟用"
+            : connection
+              ? socialConnectionStateLabels[connection.state]
+              : "尚未連線";
           return (
-            <label key={platform} className="block">
-              <span className="mb-2 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                {socialPlatformLabels[platform]}文案
-                {connection && !connection.connected ? (
+            <article
+              key={platform}
+              className={cn(
+                "rounded-2xl border border-white/10 p-4",
+                disabledTikTok && "opacity-70",
+              )}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm text-white">
+                    {socialPlatformLabels[platform]}
+                  </h3>
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    {copyHints[platform]}
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-end gap-1">
                   <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-500">
-                    尚未連線
+                    已串官方 API
                   </span>
-                ) : null}
-                {publication ? (
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-[10px]",
-                      publication.status === "published"
+                      connectionState === "connected"
                         ? "bg-emerald-400/10 text-emerald-300"
-                        : publication.status === "failed"
+                        : connectionState === "error"
                           ? "bg-red-400/10 text-red-200"
-                          : "bg-white/5 text-zinc-500",
+                          : connectionState === "permission_missing"
+                            ? "bg-amber-400/10 text-amber-200"
+                            : "bg-white/5 text-zinc-500",
                     )}
                   >
-                    {socialStatusLabels[publication.status]}
+                    {connectionLabel}
                   </span>
-                ) : null}
-              </span>
+                  {publication ? (
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px]",
+                        publication.status === "published"
+                          ? "bg-emerald-400/10 text-emerald-300"
+                          : publication.status === "failed"
+                            ? "bg-red-400/10 text-red-200"
+                            : "bg-white/5 text-zinc-500",
+                      )}
+                    >
+                      {socialStatusLabels[publication.status]}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-500">
+                      尚未發布
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {connection?.accountName ? (
+                <p className="mt-2 text-[11px] text-zinc-400">
+                  帳號：{connection.accountName}
+                </p>
+              ) : null}
+              {connection?.missingEnv?.length ? (
+                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                  缺少環境變數：{connection.missingEnv.join("、")}
+                </p>
+              ) : connection && !connection.connected && connection.reason ? (
+                <p className="mt-2 text-[11px] leading-5 text-zinc-500">
+                  {connection.reason}
+                </p>
+              ) : null}
+
               <textarea
                 rows={platform === "facebook" ? 7 : 5}
                 value={copy[platform] ?? ""}
+                disabled={disabledTikTok}
                 onChange={(event) =>
                   setCopy((current) => ({
                     ...current,
                     [platform]: event.target.value,
                   }))
                 }
-                className="editor-input min-h-28 resize-y text-sm leading-7"
-                placeholder={`${socialPlatformLabels[platform]} 獨立文案`}
+                onBlur={() => {
+                  if (article.id && !disabledTikTok) void persistPlatform(platform);
+                }}
+                className="editor-input mt-3 min-h-28 resize-y text-sm leading-7"
+                placeholder={`${socialPlatformLabels[platform]} 文案可手動修改`}
               />
-              {publication?.error_message ? (
-                <span className="mt-2 flex flex-col gap-2 text-[11px] text-red-200 sm:flex-row sm:items-center sm:justify-between">
-                  <span>{publication.error_message}</span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={Boolean(busy)}
-                    onClick={() => void retry(publication.id)}
-                  >
-                    {busy === `retry-${publication.id}` ? (
-                      <LoaderCircle className="size-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="size-3.5" />
-                    )}
-                    重新發布
-                  </Button>
-                </span>
-              ) : publication?.external_url ? (
+
+              {publication?.external_url ? (
                 <a
                   href={publication.external_url}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-2 inline-block text-[11px] text-[#d3b176]"
                 >
-                  查看外部貼文
+                  外部貼文連結
                 </a>
+              ) : publication?.status === "published" ? (
+                <p className="mt-2 text-[11px] text-zinc-500">已發布，沒有外部連結</p>
               ) : null}
-            </label>
+
+              {publication?.error_message ? (
+                <p className="mt-2 text-[11px] leading-5 text-red-200">
+                  失敗原因：{publication.error_message}
+                </p>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={
+                    Boolean(busy) ||
+                    disabledTikTok ||
+                    !article.id ||
+                    publication?.status === "publishing"
+                  }
+                  onClick={() => void publishPlatform(platform)}
+                >
+                  {busy === `publish-${platform}` ? (
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                  ) : (
+                    <Send className="size-3.5" />
+                  )}
+                  發布
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={
+                    Boolean(busy) ||
+                    disabledTikTok ||
+                    !publication ||
+                    publication.status === "publishing"
+                  }
+                  onClick={() => void retry(publication!.id)}
+                >
+                  {busy === `retry-${publication?.id}` ? (
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-3.5" />
+                  )}
+                  重新發布
+                </Button>
+              </div>
+            </article>
           );
         })}
       </div>
@@ -357,22 +430,6 @@ export function SocialSyncPanel({
           {error}
         </p>
       ) : null}
-
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-        <Button
-          type="button"
-          disabled={Boolean(busy) || !selected.length}
-          onClick={() => void publishSelected()}
-        >
-          {busy === "publish" ? (
-            <LoaderCircle className="size-4 animate-spin" />
-          ) : null}
-          同步發布已選社群
-        </Button>
-        <p className="text-[11px] leading-6 text-zinc-600 sm:self-center">
-          不會因為按下網站「發布」就自動發到社群。
-        </p>
-      </div>
     </section>
   );
 }

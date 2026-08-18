@@ -1,6 +1,9 @@
 import {
+  FACEBOOK_CREDENTIAL_ENV,
+  FACEBOOK_REQUIRED_ENV,
   facebookConfigured,
   facebookConfig,
+  missingEnv,
 } from "@/lib/social/config";
 import { metaRequest } from "@/lib/social/meta-client";
 import { isDirectVideoUrl, isPublicImageUrl } from "@/lib/social/platforms";
@@ -15,10 +18,13 @@ export class FacebookPublisher implements SocialPublisher {
   readonly platform = "facebook" as const;
 
   async getConnection(): Promise<SocialPublisherConnection> {
-    if (!facebookConfigured()) {
+    const missingRequired = missingEnv(FACEBOOK_REQUIRED_ENV);
+    if (missingRequired.length) {
       return {
         connected: false,
-        reason: "尚未連線",
+        state: "credentials_missing",
+        reason: "尚未設定 credentials",
+        missingEnv: missingEnv(FACEBOOK_CREDENTIAL_ENV),
       };
     }
     const { pageId, pageAccessToken } = facebookConfig();
@@ -30,14 +36,18 @@ export class FacebookPublisher implements SocialPublisher {
       );
       return {
         connected: true,
+        state: "connected",
         accountName: page.name ?? page.id,
         reason: null,
+        missingEnv: [],
       };
     } catch (error) {
       return {
         connected: false,
+        state: "error",
         reason:
           error instanceof Error ? error.message : "Facebook Page 連線失敗",
+        missingEnv: [],
       };
     }
   }
@@ -46,6 +56,9 @@ export class FacebookPublisher implements SocialPublisher {
     const connection = await this.getConnection();
     if (!connection.connected) {
       return { ok: false, error: connection.reason || "尚未連線" };
+    }
+    if (!facebookConfigured()) {
+      return { ok: false, error: "尚未設定 credentials" };
     }
     const { pageId, pageAccessToken } = facebookConfig();
     const message = input.text.trim();

@@ -65,7 +65,9 @@ export function upsertPreviewSocialPublication(input: {
         media_url: input.mediaUrl ?? existing.media_url,
         status: input.status ?? existing.status,
         error_message:
-          input.status && input.status !== "failed" ? null : existing.error_message,
+          input.status && input.status !== "failed"
+            ? null
+            : existing.error_message,
         updated_at: timestamp,
       }
     : {

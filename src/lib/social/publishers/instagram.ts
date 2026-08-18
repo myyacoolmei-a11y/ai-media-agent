@@ -1,6 +1,9 @@
 import {
+  INSTAGRAM_CREDENTIAL_ENV,
+  INSTAGRAM_REQUIRED_ENV,
   instagramConfigured,
   instagramConfig,
+  missingEnv,
 } from "@/lib/social/config";
 import { metaRequest } from "@/lib/social/meta-client";
 import { isDirectVideoUrl, isPublicImageUrl } from "@/lib/social/platforms";
@@ -11,45 +14,40 @@ import type {
   SocialPublishResult,
 } from "@/lib/social/publisher";
 
-async function resolveIgUserId(pageId: string, token: string, explicit?: string) {
-  if (explicit) return explicit;
-  const page = await metaRequest<{
-    instagram_business_account?: { id?: string };
-  }>(`/${pageId}`, token, {
-    search: { fields: "instagram_business_account" },
-  });
-  const id = page.instagram_business_account?.id;
-  if (!id) {
-    throw new Error("這個 Facebook Page 尚未連結 Instagram 專業帳號。");
-  }
-  return id;
-}
-
 export class InstagramPublisher implements SocialPublisher {
   readonly platform = "instagram" as const;
 
   async getConnection(): Promise<SocialPublisherConnection> {
-    if (!instagramConfigured()) {
-      return { connected: false, reason: "尚未連線" };
+    const missingRequired = missingEnv(INSTAGRAM_REQUIRED_ENV);
+    if (missingRequired.length || !instagramConfigured()) {
+      return {
+        connected: false,
+        state: "credentials_missing",
+        reason: "尚未設定 credentials",
+        missingEnv: missingEnv(INSTAGRAM_CREDENTIAL_ENV),
+      };
     }
-    const { pageId, pageAccessToken, igUserId } = instagramConfig();
+    const { pageAccessToken, igUserId } = instagramConfig();
     try {
-      const id = await resolveIgUserId(pageId, pageAccessToken, igUserId);
       const account = await metaRequest<{ id: string; username?: string }>(
-        `/${id}`,
+        `/${igUserId}`,
         pageAccessToken,
         { search: { fields: "id,username" } },
       );
       return {
         connected: true,
+        state: "connected",
         accountName: account.username ?? account.id,
         reason: null,
+        missingEnv: [],
       };
     } catch (error) {
       return {
         connected: false,
+        state: "error",
         reason:
           error instanceof Error ? error.message : "Instagram 連線失敗",
+        missingEnv: [],
       };
     }
   }
@@ -63,10 +61,12 @@ export class InstagramPublisher implements SocialPublisher {
     if (!caption) {
       return { ok: false, error: "Instagram 文案是空的。" };
     }
-    const { pageId, pageAccessToken, igUserId } = instagramConfig();
+    const { pageAccessToken, igUserId } = instagramConfig();
+    if (!igUserId || !pageAccessToken) {
+      return { ok: false, error: "尚未設定 credentials" };
+    }
 
     try {
-      const id = await resolveIgUserId(pageId, pageAccessToken, igUserId);
       const search: Record<string, string> = { caption };
       if (isDirectVideoUrl(input.mediaUrl)) {
         search.media_type = "REELS";
@@ -80,10 +80,14 @@ export class InstagramPublisher implements SocialPublisher {
         };
       }
 
-      const container = await metaRequest<{ id?: string }>(`/${id}/media`, pageAccessToken, {
-        method: "POST",
-        search,
-      });
+      const container = await metaRequest<{ id?: string }>(
+        `/${igUserId}/media`,
+        pageAccessToken,
+        {
+          method: "POST",
+          search,
+        },
+      );
       if (!container.id) {
         return { ok: false, error: "Instagram 無法建立媒體容器。" };
       }
@@ -91,16 +95,30 @@ export class InstagramPublisher implements SocialPublisher {
         await waitUntilReady(container.id, pageAccessToken);
       }
       const published = await metaRequest<{ id?: string }>(
-        `/${id}/media_publish`,
+        `/${igUserId}/media_publish`,
         pageAccessToken,
         { method: "POST", search: { creation_id: container.id } },
       );
+      const mediaId = published.id ?? container.id;
+      let permalink: string | null = mediaId
+        ? `https://www.instagram.com/p/${mediaId}/`
+        : null;
+      if (mediaId) {
+        try {
+          const media = await metaRequest<{ permalink?: string }>(
+            `/${mediaId}`,
+            pageAccessToken,
+            { search: { fields: "permalink" } },
+          );
+          if (media.permalink) permalink = media.permalink;
+        } catch {
+          // Keep the constructed URL if permalink lookup fails.
+        }
+      }
       return {
         ok: true,
-        externalPostId: published.id ?? container.id,
-        externalUrl: published.id
-          ? `https://www.instagram.com/p/${published.id}/`
-          : null,
+        externalPostId: mediaId,
+        externalUrl: permalink,
       };
     } catch (error) {
       return {
@@ -112,7 +130,7 @@ export class InstagramPublisher implements SocialPublisher {
 }
 
 async function waitUntilReady(creationId: string, token: string) {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
     const status = await metaRequest<{
       status_code?: string;
       status?: string;
@@ -127,4 +145,5 @@ async function waitUntilReady(creationId: string, token: string) {
     }
     await new Promise((resolve) => setTimeout(resolve, 2500));
   }
+  throw new Error("Instagram 影片處理逾時。");
 }

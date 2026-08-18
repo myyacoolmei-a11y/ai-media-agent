@@ -8,11 +8,16 @@ import { Button } from "@/components/ui/button";
 import { formatStoryDateTime } from "@/lib/content/dates";
 import {
   SOCIAL_PLATFORMS,
+  socialConnectionStateLabels,
   socialPlatformLabels,
   socialStatusLabels,
 } from "@/lib/social/platforms";
 import { cn } from "@/lib/utils";
-import type { SocialPlatform, SocialPublication } from "@/types/social";
+import type {
+  SocialConnection,
+  SocialPlatform,
+  SocialPublication,
+} from "@/types/social";
 
 const statusFilters = [
   { value: "", label: "全部狀態" },
@@ -25,6 +30,7 @@ export function SocialStatusBoard() {
   const [platform, setPlatform] = useState("");
   const [status, setStatus] = useState("");
   const [rows, setRows] = useState<SocialPublication[]>([]);
+  const [connections, setConnections] = useState<SocialConnection[]>([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
@@ -32,13 +38,20 @@ export function SocialStatusBoard() {
     const params = new URLSearchParams();
     if (platform) params.set("platform", platform);
     if (status) params.set("status", status);
-    const response = await fetch(`/api/social/publications?${params.toString()}`);
-    const body = (await response.json()) as {
+    const [listResponse, statusResponse] = await Promise.all([
+      fetch(`/api/social/publications?${params.toString()}`),
+      fetch("/api/social/status"),
+    ]);
+    const body = (await listResponse.json()) as {
       publications?: SocialPublication[];
       error?: string;
     };
-    if (!response.ok) throw new Error(body.error || "無法載入社群紀錄。");
+    if (!listResponse.ok) throw new Error(body.error || "無法載入社群紀錄。");
     setRows(body.publications ?? []);
+    const statusBody = (await statusResponse.json()) as {
+      connections?: SocialConnection[];
+    };
+    setConnections(statusBody.connections ?? []);
   }, [platform, status]);
 
   useEffect(() => {
@@ -69,6 +82,37 @@ export function SocialStatusBoard() {
 
   return (
     <div>
+      {connections.length ? (
+        <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {connections.map((item) => (
+            <div
+              key={item.platform}
+              className="rounded-2xl border border-white/10 p-4"
+            >
+              <p className="text-sm text-white">{item.label}</p>
+              <p className="mt-2 text-[10px] text-zinc-500">已串官方 API</p>
+              <p
+                className={cn(
+                  "mt-2 text-xs",
+                  item.connected ? "text-emerald-300" : "text-zinc-400",
+                )}
+              >
+                {socialConnectionStateLabels[item.state]}
+              </p>
+              {item.missingEnv.length ? (
+                <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+                  {item.missingEnv.join("、")}
+                </p>
+              ) : item.reason ? (
+                <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+                  {item.reason}
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-wrap gap-2">
           <select
@@ -108,6 +152,14 @@ export function SocialStatusBoard() {
       ) : null}
 
       <div className="mt-6 overflow-hidden rounded-3xl border border-white/[0.08]">
+        <div className="hidden border-b border-white/[0.06] px-5 py-3 text-[10px] uppercase tracking-[0.16em] text-zinc-600 lg:grid lg:grid-cols-[1.4fr_90px_90px_140px_1fr_auto]">
+          <span>報導</span>
+          <span>平台</span>
+          <span>發布狀態</span>
+          <span>發布時間</span>
+          <span>外部連結 / 錯誤訊息</span>
+          <span>重新發布</span>
+        </div>
         {rows.length ? (
           rows.map((row) => (
             <div
@@ -165,7 +217,7 @@ export function SocialStatusBoard() {
                 type="button"
                 size="sm"
                 variant="secondary"
-                disabled={Boolean(busy) || row.status === "published"}
+                disabled={Boolean(busy) || row.status === "publishing"}
                 onClick={() => void retry(row.id)}
               >
                 {busy === row.id ? (
@@ -179,7 +231,7 @@ export function SocialStatusBoard() {
           ))
         ) : (
           <p className="p-10 text-center text-sm text-zinc-600">
-            還沒有社群發布紀錄。先在內容編輯器勾選平台並產生文案。
+            還沒有社群發布紀錄。先在內容編輯器產生文案，再對單一平台按發布。
           </p>
         )}
       </div>

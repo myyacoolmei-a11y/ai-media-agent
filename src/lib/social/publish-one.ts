@@ -22,7 +22,11 @@ export async function publishOnePlatform(input: {
     contentId: input.content.id,
     platform: input.platform,
     socialText: input.text,
-    mediaUrl: input.mediaUrl ?? input.content.cover_image ?? null,
+    mediaUrl:
+      input.mediaUrl ??
+      input.content.video_url ??
+      input.content.cover_image ??
+      null,
     status: "queued",
   });
   const publishing = await markSocialPublishing(row.id, input.userId);
@@ -30,7 +34,10 @@ export async function publishOnePlatform(input: {
   const publisher = getSocialPublisher(input.platform);
   const result = await publisher.publish({
     text: input.text,
-    mediaUrl: input.mediaUrl ?? input.content.cover_image ?? input.content.video_url,
+    mediaUrl:
+      input.mediaUrl ??
+      input.content.video_url ??
+      input.content.cover_image,
     articleUrl: articlePermalink(input.content.slug),
     title: input.content.title,
     hasVideo: Boolean(input.content.video_url) || input.content.content_type === "video",
@@ -64,6 +71,6 @@ export async function republishPublication(
     content,
     platform: row.platform,
     text: row.social_text,
-    mediaUrl: row.media_url ?? content.cover_image,
+    mediaUrl: row.media_url ?? content.video_url ?? content.cover_image,
   });
 }

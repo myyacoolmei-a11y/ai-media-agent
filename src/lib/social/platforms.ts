@@ -1,4 +1,8 @@
-import type { SocialPlatform, SocialPublicationStatus } from "@/types/social";
+import type {
+  SocialConnectionState,
+  SocialPlatform,
+  SocialPublicationStatus,
+} from "@/types/social";
 
 export const SOCIAL_PLATFORMS: SocialPlatform[] = [
   "facebook",
@@ -20,6 +24,16 @@ export const socialStatusLabels: Record<SocialPublicationStatus, string> = {
   publishing: "發布中",
   published: "已發布",
   failed: "發布失敗",
+};
+
+export const socialConnectionStateLabels: Record<
+  SocialConnectionState,
+  string
+> = {
+  connected: "已連線",
+  credentials_missing: "尚未設定 credentials",
+  permission_missing: "尚未取得平台權限",
+  error: "連線失敗",
 };
 
 export function isDirectVideoUrl(url: string | null | undefined) {
