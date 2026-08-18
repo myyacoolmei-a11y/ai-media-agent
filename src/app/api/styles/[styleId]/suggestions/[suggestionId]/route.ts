@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { verifyStyleAccess } from "@/lib/style/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { brandStyleInputSchema } from "@/types/style";
 
@@ -14,11 +14,11 @@ const decisionSchema = z.object({
 });
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const user = await getAuthenticatedUser();
-  if (!user) {
-    return NextResponse.json({ error: "請先登入。" }, { status: 401 });
-  }
   const { styleId, suggestionId } = await context.params;
+  const access = await verifyStyleAccess(styleId);
+  if (!access) {
+    return NextResponse.json({ error: "找不到此風格。" }, { status: 404 });
+  }
   const payload = decisionSchema.safeParse(await request.json());
   if (!payload.success) {
     return NextResponse.json({ error: "選擇不正確。" }, { status: 400 });
@@ -30,7 +30,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     .select("*")
     .eq("id", suggestionId)
     .eq("style_profile_id", styleId)
-    .eq("user_id", user.id)
+    .eq("user_id", access.user.id)
     .eq("status", "pending")
     .single();
   if (!suggestion) {
@@ -50,8 +50,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { error } = await supabase
       .from("brand_style_profiles")
       .update(changes.data)
-      .eq("id", styleId)
-      .eq("user_id", user.id);
+      .eq("id", styleId);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
@@ -64,7 +63,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       resolved_at: new Date().toISOString(),
     })
     .eq("id", suggestionId)
-    .eq("user_id", user.id);
+    .eq("user_id", access.user.id);
 
   return NextResponse.json({ updated: true });
 }

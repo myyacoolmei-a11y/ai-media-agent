@@ -22,6 +22,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
   const publications = await listSocialPublications({
     userId: access.user.id,
+    brandId: access.content.brand_id ?? access.context.brand.id,
     contentId,
   });
   return NextResponse.json({ publications });
@@ -51,6 +52,7 @@ export async function PUT(request: Request, context: RouteContext) {
     publications.push(
       await upsertSocialDraft({
         userId: access.user.id,
+        brandId: access.content.brand_id ?? access.context.brand.id,
         contentId,
         platform,
         socialText: text,

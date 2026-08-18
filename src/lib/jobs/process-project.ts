@@ -75,7 +75,7 @@ export async function processProject(
       await Promise.all([
         supabase
           .from("projects")
-          .select("id, user_id, style_profile_id, brief")
+          .select("id, user_id, brand_id, style_profile_id, brief")
           .eq("id", projectId)
           .single(),
         supabase
@@ -98,7 +98,7 @@ export async function processProject(
       .from("brand_style_profiles")
       .select("*")
       .eq("id", project.style_profile_id)
-      .eq("user_id", project.user_id)
+      .eq("brand_id", project.brand_id)
       .single();
     if (styleError || !brandStyle) {
       throw new Error("The selected Brand Style Profile could not be loaded.");

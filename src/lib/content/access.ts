@@ -1,4 +1,5 @@
 import { getPreviewDemoContentItem } from "@/lib/content/preview-demo";
+import { getBrandContext } from "@/lib/brands/access";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,19 +12,31 @@ export async function verifyContentAccess(contentId: string) {
   if (isPreviewDemo()) {
     const content = getPreviewDemoContentItem(contentId);
     if (!content) return null;
-    return { user, supabase: null, content };
+    const context = await getBrandContext(user);
+    if (!context) return null;
+    return {
+      user,
+      supabase: null,
+      content,
+      brand: context.brand,
+      context,
+    };
   }
+
+  const context = await getBrandContext(user);
+  if (!context) return null;
 
   const supabase = createAdminClient();
   const { data: content, error } = await supabase
     .from("content_items")
     .select("*")
     .eq("id", contentId)
-    .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   if (error || !content) return null;
-  return { user, supabase, content: content as ContentItem };
+  const item = content as ContentItem;
+  if (!context.brands.some((brand) => brand.id === item.brand_id)) return null;
+  return { user, supabase, content: item, brand: context.brand, context };
 }
 
 export async function addSignedAssetUrls<T extends ContentAsset>(

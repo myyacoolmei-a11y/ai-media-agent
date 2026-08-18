@@ -24,7 +24,7 @@ export default async function EditContentPage({
     const { data } = await access.supabase
       .from("brand_style_profiles")
       .select("*")
-      .eq("user_id", access.user.id)
+      .eq("brand_id", access.content.brand_id ?? access.context.brand.id)
       .order("updated_at", { ascending: false });
     styles = (data ?? []) as BrandStyleProfile[];
   }

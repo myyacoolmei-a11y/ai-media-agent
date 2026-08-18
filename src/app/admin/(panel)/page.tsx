@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { formatStoryDateTime } from "@/lib/content/dates";
 import { getPreviewDemoContentItems } from "@/lib/content/preview-demo";
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { requireBrandContext } from "@/lib/brands/access";
 import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
@@ -15,8 +15,8 @@ import {
 } from "@/types/content";
 
 export default async function AdminHomePage() {
-  const user = await getAuthenticatedUser();
-  if (!user) redirect("/login?next=/admin");
+  const context = await requireBrandContext();
+  if (!context) redirect("/login?next=/admin");
 
   let draftCount = 0;
   let publishedCount = 0;
@@ -31,17 +31,17 @@ export default async function AdminHomePage() {
       supabase
         .from("content_items")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
+        .eq("brand_id", context.brand.id)
         .eq("status", "draft"),
       supabase
         .from("content_items")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
+        .eq("brand_id", context.brand.id)
         .eq("status", "published"),
       supabase
         .from("content_items")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("brand_id", context.brand.id)
         .in("status", ["draft", "published"])
         .order("updated_at", { ascending: false })
         .limit(6),

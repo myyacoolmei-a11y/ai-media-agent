@@ -8,6 +8,7 @@ import type {
 
 export type SocialListFilter = {
   userId: string;
+  brandId?: string;
   contentId?: string;
   platform?: SocialPlatform;
   status?: SocialPublicationStatus | "pending" | "success";
@@ -22,16 +23,32 @@ function assertSocialDatabase() {
   }
 }
 
+async function brandIdForContent(contentId: string, fallback?: string) {
+  if (fallback) return fallback;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("content_items")
+    .select("brand_id")
+    .eq("id", contentId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data?.brand_id) {
+    throw new Error("找不到對應報導的品牌。");
+  }
+  return data.brand_id as string;
+}
+
 export async function listSocialPublications(
   filter: SocialListFilter,
 ): Promise<SocialPublication[]> {
   if (isPreviewDemo()) return [];
+  if (!filter.brandId) return [];
 
   const supabase = createAdminClient();
   let query = supabase
     .from("social_publications")
     .select("*, content_items(title)")
-    .eq("user_id", filter.userId)
+    .eq("brand_id", filter.brandId)
     .order("updated_at", { ascending: false })
     .limit(80);
 
@@ -52,14 +69,13 @@ export async function listSocialPublications(
   );
 }
 
-export async function getSocialPublication(id: string, userId: string) {
+export async function getSocialPublication(id: string) {
   if (isPreviewDemo()) return null;
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("social_publications")
     .select("*, content_items(title)")
     .eq("id", id)
-    .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
@@ -69,6 +85,7 @@ export async function getSocialPublication(id: string, userId: string) {
 
 export async function upsertSocialDraft(input: {
   userId: string;
+  brandId?: string;
   contentId: string;
   platform: SocialPlatform;
   socialText: string;
@@ -77,18 +94,19 @@ export async function upsertSocialDraft(input: {
 }) {
   assertSocialDatabase();
   const supabase = createAdminClient();
+  const brandId = await brandIdForContent(input.contentId, input.brandId);
   const { data: existing } = await supabase
     .from("social_publications")
     .select("id")
     .eq("content_item_id", input.contentId)
     .eq("platform", input.platform)
-    .eq("user_id", input.userId)
     .maybeSingle();
 
   if (existing?.id) {
     const patch: Record<string, unknown> = {
       social_text: input.socialText,
       media_url: input.mediaUrl ?? null,
+      brand_id: brandId,
     };
     if (input.status) {
       patch.status = input.status;
@@ -108,6 +126,7 @@ export async function upsertSocialDraft(input: {
     .from("social_publications")
     .insert({
       user_id: input.userId,
+      brand_id: brandId,
       content_item_id: input.contentId,
       platform: input.platform,
       social_text: input.socialText,
@@ -120,8 +139,8 @@ export async function upsertSocialDraft(input: {
   return data as SocialPublication;
 }
 
-export async function markSocialPublishing(id: string, userId: string) {
-  return updateSocialPublication(id, userId, {
+export async function markSocialPublishing(id: string) {
+  return updateSocialPublication(id, {
     status: "publishing",
     error_message: null,
   });
@@ -129,10 +148,9 @@ export async function markSocialPublishing(id: string, userId: string) {
 
 export async function markSocialPublished(
   id: string,
-  userId: string,
   result: { externalPostId?: string | null; externalUrl?: string | null },
 ) {
-  return updateSocialPublication(id, userId, {
+  return updateSocialPublication(id, {
     status: "published",
     error_message: null,
     external_post_id: result.externalPostId ?? null,
@@ -141,12 +159,8 @@ export async function markSocialPublished(
   });
 }
 
-export async function markSocialFailed(
-  id: string,
-  userId: string,
-  errorMessage: string,
-) {
-  return updateSocialPublication(id, userId, {
+export async function markSocialFailed(id: string, errorMessage: string) {
+  return updateSocialPublication(id, {
     status: "failed",
     error_message: errorMessage,
   });
@@ -154,7 +168,6 @@ export async function markSocialFailed(
 
 export async function updateSocialPublication(
   id: string,
-  userId: string,
   patch: Partial<
     Pick<
       SocialPublication,
@@ -174,7 +187,6 @@ export async function updateSocialPublication(
     .from("social_publications")
     .update(patch)
     .eq("id", id)
-    .eq("user_id", userId)
     .select("*")
     .single();
   if (error) throw new Error(error.message);

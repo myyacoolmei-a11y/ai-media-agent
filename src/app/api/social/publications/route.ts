@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { requireBrandContext } from "@/lib/brands/access";
 import { listSocialPublications, type SocialListFilter } from "@/lib/social/store";
 import {
   socialPlatformSchema,
@@ -8,8 +8,8 @@ import {
 } from "@/types/social";
 
 export async function GET(request: Request) {
-  const user = await getAuthenticatedUser();
-  if (!user) {
+  const context = await requireBrandContext();
+  if (!context) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
   }
   const url = new URL(request.url);
@@ -34,7 +34,8 @@ export async function GET(request: Request) {
   }
 
   const publications = await listSocialPublications({
-    userId: user.id,
+    userId: context.user.id,
+    brandId: context.brand.id,
     contentId: url.searchParams.get("contentId") ?? undefined,
     platform: platform?.success ? platform.data : undefined,
     status,

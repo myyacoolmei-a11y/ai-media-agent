@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { requireBrandContext } from "@/lib/brands/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   contentStatusLabels,
@@ -27,13 +27,13 @@ const filters: Array<{ label: string; value?: ContentStatus }> = [
 export default async function ContentsPage({
   searchParams,
 }: ContentsPageProps) {
-  const user = await getAuthenticatedUser();
-  if (!user) redirect("/login");
+  const context = await requireBrandContext();
+  if (!context) redirect("/login");
   const { status } = await searchParams;
   let query = createAdminClient()
     .from("content_items")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("brand_id", context.brand.id)
     .order("updated_at", { ascending: false });
   if (filters.some((filter) => filter.value === status)) {
     query = query.eq("status", status);

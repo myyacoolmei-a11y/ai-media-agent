@@ -1,8 +1,7 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { StyleProfileWorkspace } from "@/components/style-profile-workspace";
-import { getAuthenticatedUser } from "@/lib/jobs/access";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyStyleAccess } from "@/lib/style/access";
 import type {
   BrandStyleProfile,
   PreferenceSuggestion,
@@ -13,36 +12,28 @@ type StylePageProps = {
 };
 
 export default async function StylePage({ params }: StylePageProps) {
-  const user = await getAuthenticatedUser();
-  if (!user) redirect("/login");
   const { styleId } = await params;
-  const supabase = createAdminClient();
-  const [styleQuery, feedbackQuery, suggestionQuery] = await Promise.all([
-    supabase
-      .from("brand_style_profiles")
-      .select("*")
-      .eq("id", styleId)
-      .eq("user_id", user.id)
-      .single(),
-    supabase
+  const access = await verifyStyleAccess(styleId);
+  if (!access) notFound();
+  const [feedbackQuery, suggestionQuery] = await Promise.all([
+    access.supabase
       .from("style_feedback")
       .select("*")
       .eq("style_profile_id", styleId)
-      .eq("user_id", user.id)
+      .eq("user_id", access.user.id)
       .order("created_at", { ascending: false })
       .limit(100),
-    supabase
+    access.supabase
       .from("preference_suggestions")
       .select("*")
       .eq("style_profile_id", styleId)
-      .eq("user_id", user.id)
+      .eq("user_id", access.user.id)
       .order("created_at", { ascending: false }),
   ]);
-  if (!styleQuery.data) notFound();
 
   return (
     <StyleProfileWorkspace
-      style={styleQuery.data as BrandStyleProfile}
+      style={access.style as BrandStyleProfile}
       initialFeedback={feedbackQuery.data ?? []}
       initialSuggestions={
         (suggestionQuery.data ?? []) as PreferenceSuggestion[]

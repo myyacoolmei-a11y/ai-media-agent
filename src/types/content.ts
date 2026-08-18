@@ -65,6 +65,7 @@ export type ContentAsset = {
 export type ContentItem = {
   id: string;
   user_id: string;
+  brand_id?: string;
   project_id: string | null;
   style_profile_id: string | null;
   title: string;

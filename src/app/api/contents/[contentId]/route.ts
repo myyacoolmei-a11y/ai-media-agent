@@ -49,7 +49,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       .from("brand_style_profiles")
       .select("id")
       .eq("id", payload.data.styleProfileId)
-      .eq("user_id", access.user.id)
+      .eq("brand_id", access.content.brand_id ?? access.context.brand.id)
       .maybeSingle();
     if (!style) {
       return NextResponse.json({ error: "品牌風格不存在。" }, { status: 400 });
@@ -75,7 +75,6 @@ export async function PATCH(request: Request, context: RouteContext) {
       .select("id")
       .eq("id", payload.data.coverAssetId)
       .eq("content_item_id", contentId)
-      .eq("user_id", access.user.id)
       .eq("asset_type", "image")
       .eq("status", "ready")
       .maybeSingle();
@@ -104,7 +103,6 @@ export async function PATCH(request: Request, context: RouteContext) {
         : {}),
     })
     .eq("id", contentId)
-    .eq("user_id", access.user.id)
     .select("*")
     .single();
   if (error) {
@@ -132,7 +130,6 @@ export async function DELETE(_request: Request, context: RouteContext) {
   await access.supabase
     .from("content_items")
     .update({ status: "archived", published_at: null })
-    .eq("id", contentId)
-    .eq("user_id", access.user.id);
+    .eq("id", contentId);
   return NextResponse.json({ archived: true });
 }

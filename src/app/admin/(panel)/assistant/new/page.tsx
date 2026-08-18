@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ProjectCreateForm } from "@/components/project-create-form";
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { requireBrandContext } from "@/lib/brands/access";
 import { isPreviewDemo } from "@/lib/preview";
 import { getProviderStatus } from "@/lib/providers/config";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -24,8 +24,8 @@ export default async function NewAssistantPage({
   const initialType =
     type === "photos" || type === "audio" || type === "video" ? type : "video";
   const providerStatus = getProviderStatus();
-  const user = await getAuthenticatedUser();
-  if (!user) redirect("/login?next=/admin/assistant/new");
+  const context = await requireBrandContext();
+  if (!context) redirect("/login?next=/admin/assistant/new");
 
   if (isPreviewDemo()) {
     return (
@@ -51,7 +51,7 @@ export default async function NewAssistantPage({
   const { data } = await createAdminClient()
     .from("brand_style_profiles")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("brand_id", context.brand.id)
     .order("updated_at", { ascending: false });
   const brandStyles = (data ?? []) as BrandStyleProfile[];
   if (!brandStyles.length) redirect("/styles/new");

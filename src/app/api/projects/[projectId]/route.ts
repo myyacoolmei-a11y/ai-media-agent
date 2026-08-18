@@ -41,20 +41,17 @@ export async function GET(_request: Request, context: RouteContext) {
       .from("media")
       .select("*")
       .eq("project_id", projectId)
-      .eq("user_id", access.user.id)
       .limit(1)
       .maybeSingle(),
     access.supabase
       .from("ai_tasks")
       .select("type,status,progress,error,created_at")
       .eq("project_id", projectId)
-      .eq("user_id", access.user.id)
       .order("created_at", { ascending: true }),
     access.supabase
       .from("ai_results")
       .select("*")
       .eq("project_id", projectId)
-      .eq("user_id", access.user.id)
       .order("version", { ascending: false })
       .limit(1)
       .maybeSingle(),
@@ -62,7 +59,6 @@ export async function GET(_request: Request, context: RouteContext) {
       .from("brand_style_profiles")
       .select("id,style_name")
       .eq("id", access.project.style_profile_id)
-      .eq("user_id", access.user.id)
       .single(),
   ]);
 
@@ -72,7 +68,6 @@ export async function GET(_request: Request, context: RouteContext) {
       .from("transcripts")
       .select("text,segments,language")
       .eq("media_id", mediaQuery.data.id)
-      .eq("user_id", access.user.id)
       .maybeSingle();
     transcript = transcriptQuery.data;
   }
@@ -142,8 +137,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         selected_editing_version: payload.data.editingVersion,
         selected_cover_text: payload.data.coverText,
       })
-      .eq("id", projectId)
-      .eq("user_id", access.user.id);
+      .eq("id", projectId);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
@@ -173,7 +167,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     .from("ai_results")
     .select("id,content")
     .eq("project_id", projectId)
-    .eq("user_id", access.user.id)
     .order("version", { ascending: false })
     .limit(1)
     .single();
@@ -258,8 +251,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { error } = await access.supabase
     .from("ai_results")
     .update({ content: payload.data.result })
-    .eq("id", latest.id)
-    .eq("user_id", access.user.id);
+    .eq("id", latest.id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

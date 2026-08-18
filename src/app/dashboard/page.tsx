@@ -3,35 +3,35 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { requireBrandContext } from "@/lib/brands/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 import { contentStatusLabels, contentTypeLabels } from "@/types/content";
 
 export default async function DashboardPage() {
-  const user = await getAuthenticatedUser();
-  if (!user) redirect("/login");
+  const context = await requireBrandContext();
+  if (!context) redirect("/login");
   const supabase = createAdminClient();
   const [drafts, previews, published, recent] = await Promise.all([
     supabase
       .from("content_items")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
+      .eq("brand_id", context.brand.id)
       .eq("status", "draft"),
     supabase
       .from("content_items")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
+      .eq("brand_id", context.brand.id)
       .eq("status", "preview"),
     supabase
       .from("content_items")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
+      .eq("brand_id", context.brand.id)
       .eq("status", "published"),
     supabase
       .from("content_items")
       .select("id,title,content_type,status,updated_at")
-      .eq("user_id", user.id)
+      .eq("brand_id", context.brand.id)
       .order("updated_at", { ascending: false })
       .limit(5),
   ]);

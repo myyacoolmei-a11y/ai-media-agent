@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { displayCategory } from "@/lib/content/categories";
 import { formatStoryDate } from "@/lib/content/dates";
 import { getPreviewDemoContentItems } from "@/lib/content/preview-demo";
-import { getAuthenticatedUser } from "@/lib/jobs/access";
+import { requireBrandContext } from "@/lib/brands/access";
 import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -16,8 +16,8 @@ import {
 } from "@/types/content";
 
 export default async function AdminContentListPage() {
-  const user = await getAuthenticatedUser();
-  if (!user) redirect("/login?next=/admin/content");
+  const context = await requireBrandContext();
+  if (!context) redirect("/login?next=/admin/content");
 
   let items: ContentItem[] = [];
   if (isPreviewDemo()) {
@@ -26,7 +26,7 @@ export default async function AdminContentListPage() {
     const { data } = await createAdminClient()
       .from("content_items")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("brand_id", context.brand.id)
       .in("status", ["draft", "published"])
       .order("updated_at", { ascending: false });
     items = (data ?? []) as ContentItem[];

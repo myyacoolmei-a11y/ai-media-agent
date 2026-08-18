@@ -19,7 +19,7 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "請先登入。" }, { status: 401 });
   }
   const { id } = await context.params;
-  const row = await getSocialPublication(id, user.id);
+  const row = await getSocialPublication(id);
   if (!row) {
     return NextResponse.json({ error: "找不到社群發布紀錄。" }, { status: 404 });
   }

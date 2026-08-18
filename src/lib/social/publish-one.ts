@@ -19,6 +19,7 @@ export async function publishOnePlatform(input: {
 }): Promise<SocialPublication> {
   const row = await upsertSocialDraft({
     userId: input.userId,
+    brandId: input.content.brand_id,
     contentId: input.content.id,
     platform: input.platform,
     socialText: input.text,
@@ -29,7 +30,7 @@ export async function publishOnePlatform(input: {
       null,
     status: "queued",
   });
-  const publishing = await markSocialPublishing(row.id, input.userId);
+  const publishing = await markSocialPublishing(row.id);
   const current = publishing ?? row;
   const publisher = getSocialPublisher(input.platform);
   const result = await publisher.publish({
@@ -44,18 +45,14 @@ export async function publishOnePlatform(input: {
   });
   if (result.ok) {
     return (
-      (await markSocialPublished(current.id, input.userId, {
+      (await markSocialPublished(current.id, {
         externalPostId: result.externalPostId,
         externalUrl: result.externalUrl,
       })) ?? current
     );
   }
   return (
-    (await markSocialFailed(
-      current.id,
-      input.userId,
-      result.error || "發布失敗",
-    )) ?? current
+    (await markSocialFailed(current.id, result.error || "發布失敗")) ?? current
   );
 }
 
@@ -64,7 +61,7 @@ export async function republishPublication(
   userId: string,
   content: ContentItem,
 ) {
-  const row = await getSocialPublication(id, userId);
+  const row = await getSocialPublication(id);
   if (!row) return null;
   return publishOnePlatform({
     userId,

@@ -23,6 +23,7 @@ export type SocialPublicationStatus = z.infer<
 export type SocialPublication = {
   id: string;
   user_id: string;
+  brand_id?: string;
   content_item_id: string;
   platform: SocialPlatform;
   social_text: string;

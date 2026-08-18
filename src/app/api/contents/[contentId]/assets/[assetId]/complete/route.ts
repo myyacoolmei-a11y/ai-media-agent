@@ -22,7 +22,6 @@ export async function POST(_request: Request, context: RouteContext) {
     .select("*")
     .eq("id", assetId)
     .eq("content_item_id", contentId)
-    .eq("user_id", access.user.id)
     .single();
   if (!asset) {
     return NextResponse.json({ error: "找不到媒體資料。" }, { status: 404 });
@@ -48,7 +47,6 @@ export async function POST(_request: Request, context: RouteContext) {
     .from("content_assets")
     .update({ status: "ready" })
     .eq("id", assetId)
-    .eq("user_id", access.user.id)
     .select("*")
     .single();
   if (error) {
