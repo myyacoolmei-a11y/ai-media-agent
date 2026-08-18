@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { verifyContentAccess } from "@/lib/content/access";
+import { isPreviewDemo } from "@/lib/preview";
 import { publishOnePlatform } from "@/lib/social/publish-one";
+import { PREVIEW_SOCIAL_DB_BLOCKED } from "@/lib/social/store";
 import { socialPlatformSchema } from "@/types/social";
 
 type RouteContext = {
@@ -23,6 +25,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request, context: RouteContext) {
+  if (isPreviewDemo()) {
+    return NextResponse.json({ error: PREVIEW_SOCIAL_DB_BLOCKED }, { status: 403 });
+  }
   const { contentId } = await context.params;
   const access = await verifyContentAccess(contentId);
   if (!access) {
@@ -37,6 +42,12 @@ export async function POST(request: Request, context: RouteContext) {
   const payload = bodySchema.safeParse(await request.json());
   if (!payload.success) {
     return NextResponse.json({ error: "請至少選擇一個社群平台。" }, { status: 400 });
+  }
+  if (payload.data.platforms.some((platform) => platform === "threads" || platform === "tiktok")) {
+    return NextResponse.json(
+      { error: "Threads / TikTok 這階段尚未啟用。" },
+      { status: 409 },
+    );
   }
 
   const publications = [];

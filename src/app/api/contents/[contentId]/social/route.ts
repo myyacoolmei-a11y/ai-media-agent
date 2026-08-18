@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { verifyContentAccess } from "@/lib/content/access";
+import { isPreviewDemo } from "@/lib/preview";
 import {
+  PREVIEW_SOCIAL_DB_BLOCKED,
   listSocialPublications,
   upsertSocialDraft,
 } from "@/lib/social/store";
@@ -30,6 +32,9 @@ export async function PUT(request: Request, context: RouteContext) {
   const access = await verifyContentAccess(contentId);
   if (!access) {
     return NextResponse.json({ error: "找不到內容或沒有權限。" }, { status: 404 });
+  }
+  if (isPreviewDemo()) {
+    return NextResponse.json({ error: PREVIEW_SOCIAL_DB_BLOCKED }, { status: 403 });
   }
   const payload = socialDraftsSchema.safeParse({
     ...(await request.json()),

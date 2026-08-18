@@ -3,6 +3,7 @@
 import { LoaderCircle, RefreshCw, Send, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { MetaSetupGuide } from "@/components/admin/meta-setup-guide";
 import { Button } from "@/components/ui/button";
 import { SITE_NAME } from "@/lib/brand";
 import {
@@ -58,8 +59,18 @@ export function SocialSyncPanel({
   const [connections, setConnections] = useState<SocialConnection[]>([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [previewDemo, setPreviewDemo] = useState(false);
   const hasVideo = Boolean(article.video_url) || article.content_type === "video";
   const sitePublished = article.status === "published";
+
+  useEffect(() => {
+    void fetch("/api/preview-login")
+      .then((response) => response.json())
+      .then((payload: { enabled?: boolean }) => {
+        setPreviewDemo(Boolean(payload.enabled));
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     void fetch("/api/social/status")
@@ -126,7 +137,7 @@ export function SocialSyncPanel({
         tiktok: body.copy.tiktok ?? "",
       };
       setCopy(next);
-      if (article.id) {
+      if (article.id && !previewDemo) {
         await fetch(`/api/contents/${article.id}/social`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -152,7 +163,7 @@ export function SocialSyncPanel({
   }
 
   async function persistPlatform(platform: SocialPlatform) {
-    if (!article.id) return;
+    if (!article.id || previewDemo) return;
     await fetch(`/api/contents/${article.id}/social`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -164,6 +175,14 @@ export function SocialSyncPanel({
   }
 
   async function publishPlatform(platform: SocialPlatform) {
+    if (platform === "threads" || platform === "tiktok") {
+      setError("Threads / TikTok 這階段尚未啟用。");
+      return;
+    }
+    if (previewDemo) {
+      setError("Preview 不會寫入 production social_publications。請在 production 後台操作真實報導。");
+      return;
+    }
     if (!article.id) {
       setError("請先儲存報導，再同步社群。");
       return;
@@ -242,6 +261,13 @@ export function SocialSyncPanel({
         </Button>
       </div>
 
+        {previewDemo ? (
+          <p className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-3 text-xs leading-6 text-amber-100">
+            Preview 不會寫入 production 的 social_publications。請在
+            https://ai-media-agent-production.up.railway.app/admin 操作真實報導。
+          </p>
+        ) : null}
+
       <div className="mt-5 rounded-2xl border border-[#d3b176]/20 bg-[#d3b176]/[0.06] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-white">{SITE_NAME}</p>
@@ -265,15 +291,20 @@ export function SocialSyncPanel({
         {SOCIAL_PLATFORMS.map((platform) => {
           const connection = connectionByPlatform[platform];
           const publication = publications.find((row) => row.platform === platform);
+          const live = platform === "facebook" || platform === "instagram";
           const disabledTikTok = platform === "tiktok" && !hasVideo;
-          const connectionState = disabledTikTok
-            ? "permission_missing"
-            : connection?.state ?? "credentials_missing";
-          const connectionLabel = disabledTikTok
-            ? "沒有影片，尚未啟用"
-            : connection
-              ? socialConnectionStateLabels[connection.state]
-              : "尚未連線";
+          const connectionState = !live
+            ? "credentials_missing"
+            : disabledTikTok
+              ? "permission_missing"
+              : connection?.state ?? "credentials_missing";
+          const connectionLabel = !live
+            ? "尚未連線"
+            : disabledTikTok
+              ? "沒有影片，尚未啟用"
+              : connection
+                ? socialConnectionStateLabels[connection.state]
+                : "尚未連線";
           return (
             <article
               key={platform}
@@ -293,7 +324,7 @@ export function SocialSyncPanel({
                 </div>
                 <div className="flex flex-wrap justify-end gap-1">
                   <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-zinc-500">
-                    已串官方 API
+                    {live ? "已串官方 API" : "本階段未啟用"}
                   </span>
                   <span
                     className={cn(
@@ -387,6 +418,8 @@ export function SocialSyncPanel({
                   size="sm"
                   disabled={
                     Boolean(busy) ||
+                    previewDemo ||
+                    !live ||
                     disabledTikTok ||
                     !article.id ||
                     publication?.status === "publishing"
@@ -406,7 +439,8 @@ export function SocialSyncPanel({
                   variant="secondary"
                   disabled={
                     Boolean(busy) ||
-                    disabledTikTok ||
+                    previewDemo ||
+                    !live ||
                     !publication ||
                     publication.status === "publishing"
                   }
@@ -430,6 +464,10 @@ export function SocialSyncPanel({
           {error}
         </p>
       ) : null}
+
+      <div className="mt-6">
+        <MetaSetupGuide />
+      </div>
     </section>
   );
 }

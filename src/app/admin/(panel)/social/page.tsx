@@ -1,5 +1,6 @@
 import { Share2 } from "lucide-react";
 
+import { MetaSetupGuide } from "@/components/admin/meta-setup-guide";
 import { SocialStatusBoard } from "@/components/admin/social-status-board";
 
 export default function AdminSocialPage() {
@@ -19,7 +20,8 @@ export default function AdminSocialPage() {
           </p>
         </div>
       </div>
-      <div className="mt-8">
+      <div className="mt-8 space-y-8">
+        <MetaSetupGuide />
         <SocialStatusBoard />
       </div>
     </div>

@@ -1,12 +1,5 @@
-import { getPreviewDemoContentItem } from "@/lib/content/preview-demo";
-import { isPreviewDemo } from "@/lib/preview";
-import {
-  getPreviewSocialPublication,
-  listPreviewSocialPublications,
-  updatePreviewSocialPublication,
-  upsertPreviewSocialPublication,
-} from "@/lib/social/preview-store";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPreviewDemo } from "@/lib/preview";
 import type {
   SocialPlatform,
   SocialPublication,
@@ -20,17 +13,19 @@ export type SocialListFilter = {
   status?: SocialPublicationStatus | "pending" | "success";
 };
 
-function withTitle(row: SocialPublication): SocialPublication {
-  const demo = getPreviewDemoContentItem(row.content_item_id);
-  return { ...row, content_title: demo?.title };
+export const PREVIEW_SOCIAL_DB_BLOCKED =
+  "Preview 不會寫入 production social_publications。請在 production 後台操作真實報導。";
+
+function assertSocialDatabase() {
+  if (isPreviewDemo()) {
+    throw new Error(PREVIEW_SOCIAL_DB_BLOCKED);
+  }
 }
 
 export async function listSocialPublications(
   filter: SocialListFilter,
 ): Promise<SocialPublication[]> {
-  if (isPreviewDemo()) {
-    return listPreviewSocialPublications(filter).map(withTitle);
-  }
+  if (isPreviewDemo()) return [];
 
   const supabase = createAdminClient();
   let query = supabase
@@ -58,11 +53,7 @@ export async function listSocialPublications(
 }
 
 export async function getSocialPublication(id: string, userId: string) {
-  if (isPreviewDemo()) {
-    const row = getPreviewSocialPublication(id);
-    if (!row || row.user_id !== userId) return null;
-    return withTitle(row);
-  }
+  if (isPreviewDemo()) return null;
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("social_publications")
@@ -84,9 +75,7 @@ export async function upsertSocialDraft(input: {
   mediaUrl?: string | null;
   status?: SocialPublicationStatus;
 }) {
-  if (isPreviewDemo()) {
-    return withTitle(upsertPreviewSocialPublication(input));
-  }
+  assertSocialDatabase();
   const supabase = createAdminClient();
   const { data: existing } = await supabase
     .from("social_publications")
@@ -179,11 +168,7 @@ export async function updateSocialPublication(
     >
   >,
 ) {
-  if (isPreviewDemo()) {
-    const existing = getPreviewSocialPublication(id);
-    if (!existing || existing.user_id !== userId) return null;
-    return withTitle(updatePreviewSocialPublication(id, patch)!);
-  }
+  assertSocialDatabase();
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("social_publications")

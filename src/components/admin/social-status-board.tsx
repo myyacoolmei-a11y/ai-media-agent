@@ -90,7 +90,11 @@ export function SocialStatusBoard() {
               className="rounded-2xl border border-white/10 p-4"
             >
               <p className="text-sm text-white">{item.label}</p>
-              <p className="mt-2 text-[10px] text-zinc-500">已串官方 API</p>
+                  <p className="mt-2 text-[10px] text-zinc-500">
+                    {item.platform === "facebook" || item.platform === "instagram"
+                      ? "已串官方 API"
+                      : "本階段未啟用"}
+                  </p>
               <p
                 className={cn(
                   "mt-2 text-xs",
@@ -217,7 +221,12 @@ export function SocialStatusBoard() {
                 type="button"
                 size="sm"
                 variant="secondary"
-                disabled={Boolean(busy) || row.status === "publishing"}
+                disabled={
+                  Boolean(busy) ||
+                  row.status === "publishing" ||
+                  row.platform === "threads" ||
+                  row.platform === "tiktok"
+                }
                 onClick={() => void retry(row.id)}
               >
                 {busy === row.id ? (
