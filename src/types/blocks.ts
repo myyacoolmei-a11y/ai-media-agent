@@ -74,7 +74,7 @@ export const articleBlockTypeLabels: Record<ArticleBlockType, string> = {
   image: "圖片",
   gallery: "圖集",
   video: "影片",
-  embed: "外部影片",
+  embed: "外部影音",
   ad: "廣告",
   related_articles: "延伸閱讀",
 };

@@ -532,44 +532,6 @@ export function ContentForm({
             placeholder="前台列表與首頁會顯示這段摘要"
           />
         </label>
-        <BlockEditor
-          blocks={blocks}
-          onChange={setBlocks}
-          ensureArticleId={async () => {
-            if (article.id) return article.id;
-            const created = await createDraft({
-              ...article,
-              slug: article.slug || createContentSlug(article.title || "draft"),
-            });
-            const next = { ...article, ...fromContent(created), id: created.id };
-            setArticle(next);
-            router.replace(`/admin/content/${created.id}/edit`);
-            return created.id;
-          }}
-          onSetCover={(url) => {
-            setCoverFile(null);
-            setCoverPreview(url);
-            setArticle((current) => ({
-              ...current,
-              cover_image: url,
-              cover_asset_id: null,
-            }));
-            setBlocks((current) =>
-              current.map((block) => ({
-                ...block,
-                metadata: {
-                  ...block.metadata,
-                  cover:
-                    block.mediaUrl === url ||
-                    (Array.isArray(block.metadata.items) &&
-                      (block.metadata.items as Array<{ url?: string }>).some(
-                        (item) => item.url === url,
-                      )),
-                },
-              })),
-            );
-          }}
-        />
 
         <div className="grid gap-5 sm:grid-cols-2">
           <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
@@ -655,6 +617,45 @@ export function ContentForm({
             </label>
           </div>
         </div>
+
+        <BlockEditor
+          blocks={blocks}
+          onChange={setBlocks}
+          ensureArticleId={async () => {
+            if (article.id) return article.id;
+            const created = await createDraft({
+              ...article,
+              slug: article.slug || createContentSlug(article.title || "draft"),
+            });
+            const next = { ...article, ...fromContent(created), id: created.id };
+            setArticle(next);
+            router.replace(`/admin/content/${created.id}/edit`);
+            return created.id;
+          }}
+          onSetCover={(url) => {
+            setCoverFile(null);
+            setCoverPreview(url);
+            setArticle((current) => ({
+              ...current,
+              cover_image: url,
+              cover_asset_id: null,
+            }));
+            setBlocks((current) =>
+              current.map((block) => ({
+                ...block,
+                metadata: {
+                  ...block.metadata,
+                  cover:
+                    block.mediaUrl === url ||
+                    (Array.isArray(block.metadata.items) &&
+                      (block.metadata.items as Array<{ url?: string }>).some(
+                        (item) => item.url === url,
+                      )),
+                },
+              })),
+            );
+          }}
+        />
 
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">

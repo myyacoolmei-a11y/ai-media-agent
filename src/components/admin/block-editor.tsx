@@ -5,7 +5,6 @@ import {
   ChevronUp,
   ImagePlus,
   LoaderCircle,
-  Plus,
   Trash2,
   Video,
 } from "lucide-react";
@@ -102,7 +101,6 @@ export function BlockEditor({
   ensureArticleId: () => Promise<string>;
   onSetCover: (previewUrl: string) => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const imageRef = useRef<HTMLInputElement>(null);
@@ -131,7 +129,6 @@ export function BlockEditor({
   }
 
   function add(type: ArticleBlockType) {
-    setMenuOpen(false);
     if (type === "image" || type === "gallery") {
       uploadTarget.current = { mode: "new", asGallery: type === "gallery" };
       imageRef.current?.click();
@@ -306,32 +303,22 @@ export function BlockEditor({
 
   return (
     <section className="rounded-[28px] border border-white/[0.08] bg-white/[0.02] p-4 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs text-zinc-400">內容區塊</p>
-          <p className="mt-1 text-[11px] text-zinc-600">
-            可任意插入文字、多張圖片、影片與廣告，並上下調整順序。
-          </p>
-        </div>
-        <div className="relative">
-          <Button size="sm" variant="secondary" type="button" onClick={() => setMenuOpen((open) => !open)}>
-            <Plus className="size-3.5" />
-            新增區塊
-          </Button>
-          {menuOpen ? (
-            <div className="absolute right-0 z-20 mt-2 w-44 rounded-2xl border border-white/10 bg-[#121012] p-1 shadow-xl">
-              {ADDABLE.map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  className="block w-full rounded-xl px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/[0.05]"
-                  onClick={() => add(type)}
-                >
-                  ＋ {articleBlockTypeLabels[type]}
-                </button>
-              ))}
-            </div>
-          ) : null}
+      <div>
+        <p className="text-xs text-zinc-400">文章內容</p>
+        <p className="mt-1 text-[11px] text-zinc-600">
+          封面下方的正文可任意插入文字、多張圖片、圖集、影片與廣告，並上下調整順序。
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {ADDABLE.map((type) => (
+            <button
+              key={type}
+              type="button"
+              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-200 hover:border-[#d3b176]/40 hover:text-white"
+              onClick={() => add(type)}
+            >
+              ＋ {articleBlockTypeLabels[type]}
+            </button>
+          ))}
         </div>
       </div>
 
