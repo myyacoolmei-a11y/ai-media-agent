@@ -547,8 +547,13 @@ export function ContentForm({
             return created.id;
           }}
           onSetCover={(url) => {
+            setCoverFile(null);
             setCoverPreview(url);
-            setArticle((current) => ({ ...current, cover_image: url }));
+            setArticle((current) => ({
+              ...current,
+              cover_image: url,
+              cover_asset_id: null,
+            }));
             setBlocks((current) =>
               current.map((block) => ({
                 ...block,

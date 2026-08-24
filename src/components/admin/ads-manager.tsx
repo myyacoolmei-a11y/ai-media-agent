@@ -62,6 +62,11 @@ export function AdsManager({
   const [saving, setSaving] = useState(false);
 
   const [advertiserName, setAdvertiserName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
+  const [description, setDescription] = useState("");
   const [campaignName, setCampaignName] = useState("");
   const [campaignAdvertiser, setCampaignAdvertiser] = useState(advertisers[0]?.id ?? "");
   const [startDate, setStartDate] = useState("");
@@ -88,11 +93,11 @@ export function AdsManager({
         height: null,
       }));
 
-  async function post(url: string, body: unknown) {
+  async function save(url: string, body: unknown, method: "POST" | "PATCH" = "POST") {
     setSaving(true);
     setError("");
     const response = await fetch(url, {
-      method: "POST",
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -103,6 +108,14 @@ export function AdsManager({
       return;
     }
     router.refresh();
+  }
+
+  function post(url: string, body: unknown) {
+    return save(url, body, "POST");
+  }
+
+  function patch(url: string, body: unknown) {
+    return save(url, body, "PATCH");
   }
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -128,11 +141,21 @@ export function AdsManager({
       {tab === "advertisers" ? (
         <section className="mt-8 space-y-4">
           <form
-            className="grid gap-3 sm:grid-cols-[1fr_auto]"
+            className="grid gap-3 sm:grid-cols-2"
             onSubmit={(event: FormEvent) => {
               event.preventDefault();
-              void post("/api/ads/advertisers", { name: advertiserName });
+              void post("/api/ads/advertisers", {
+                name: advertiserName,
+                contactName,
+                phone,
+                email,
+                website: website || null,
+              });
               setAdvertiserName("");
+              setContactName("");
+              setPhone("");
+              setEmail("");
+              setWebsite("");
             }}
           >
             <input
@@ -142,13 +165,42 @@ export function AdsManager({
               className="editor-input"
               required
             />
+            <input
+              value={contactName}
+              onChange={(event) => setContactName(event.target.value)}
+              placeholder="聯絡人"
+              className="editor-input"
+            />
+            <input
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="電話"
+              className="editor-input"
+            />
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Email"
+              className="editor-input"
+            />
+            <input
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+              placeholder="網站"
+              className="editor-input sm:col-span-2"
+            />
             <Button type="submit" size="sm" disabled={saving}>
               新增
             </Button>
           </form>
           {advertisers.map((item) => (
             <div key={item.id} className="rounded-2xl border border-white/[0.07] px-4 py-3 text-sm">
-              {item.name}
+              <p>{item.name}</p>
+              {item.contact_name || item.email ? (
+                <p className="mt-1 text-[11px] text-zinc-600">
+                  {[item.contact_name, item.email, item.phone].filter(Boolean).join(" · ")}
+                </p>
+              ) : null}
             </div>
           ))}
         </section>
@@ -246,11 +298,28 @@ export function AdsManager({
             const expired = item.end_date < today;
             return (
               <div key={item.id} className="rounded-2xl border border-white/[0.07] px-4 py-3 text-sm">
-                <p>{item.name}</p>
-                <p className="mt-1 text-[11px] text-zinc-600">
-                  {unwrapName(item.advertisers)} · {item.status} · {item.start_date} → {item.end_date}
-                  {expired ? " · 已過期不顯示" : ""}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p>{item.name}</p>
+                    <p className="mt-1 text-[11px] text-zinc-600">
+                      {unwrapName(item.advertisers)} · {item.status} · {item.start_date} → {item.end_date}
+                      {expired ? " · 已過期不顯示" : ""}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    disabled={saving}
+                    onClick={() =>
+                      void patch(`/api/ads/campaigns/${item.id}`, {
+                        status: item.status === "paused" ? "active" : "paused",
+                      })
+                    }
+                  >
+                    {item.status === "paused" ? "啟用" : "暫停"}
+                  </Button>
+                </div>
               </div>
             );
           })}
@@ -266,12 +335,14 @@ export function AdsManager({
               void post("/api/ads/creatives", {
                 campaignId: creativeCampaign,
                 headline,
+                description,
                 imageUrl,
                 ctaText: cta,
                 targetUrl,
               });
               setHeadline("");
               setImageUrl("");
+              setDescription("");
             }}
           >
             <select
@@ -286,6 +357,7 @@ export function AdsManager({
               ))}
             </select>
             <input value={headline} onChange={(event) => setHeadline(event.target.value)} placeholder="標題" className="editor-input" />
+            <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="介紹／說明" className="editor-input sm:col-span-2" />
             <input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="圖片網址" className="editor-input sm:col-span-2" />
             <input value={cta} onChange={(event) => setCta(event.target.value)} placeholder="CTA" className="editor-input" />
             <Button type="submit" size="sm" disabled={saving || !campaigns.length}>

@@ -70,7 +70,7 @@ export default async function HomePage() {
   const rest = stories.filter((story) => story.slug !== featured?.slug);
   const ranking = rest.slice(0, 5);
   const localStories = take(localFocusStories(rest), 4);
-  const latest = take(rest, 6, (story) => !isVideoStory(story));
+  const latest = take(rest, 16, (story) => !isVideoStory(story));
   const peopleStories = take(rest, 3, (story) =>
     people ? matchesSection(story.category, people.label) : false,
   );

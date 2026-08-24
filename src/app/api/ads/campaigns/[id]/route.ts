@@ -14,7 +14,8 @@ export async function PATCH(request: Request, context: RouteContext) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "請先登入。" }, { status: 401 });
   const { id } = await context.params;
-  const payload = campaignInputSchema.partial().safeParse(await request.json());
+  const body = await request.json();
+  const payload = campaignInputSchema.partial().safeParse(body);
   if (!payload.success) {
     return NextResponse.json({ error: "活動資料不完整。" }, { status: 400 });
   }
@@ -35,13 +36,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (payload.data.placementKeys) {
+  if (Array.isArray((body as { placementKeys?: unknown }).placementKeys)) {
     await supabase.from("ad_campaign_placements").delete().eq("campaign_id", id);
-    if (payload.data.placementKeys.length) {
+    if ((payload.data.placementKeys ?? []).length) {
       const { data: placements } = await supabase
         .from("ad_placements")
         .select("id,key")
-        .in("key", payload.data.placementKeys);
+        .in("key", payload.data.placementKeys ?? []);
       if (placements?.length) {
         await supabase.from("ad_campaign_placements").insert(
           placements.map((placement) => ({

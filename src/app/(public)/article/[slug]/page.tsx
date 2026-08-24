@@ -103,13 +103,17 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           />
         ) : null}
 
-        {isVideoStory(story) ? (
+        {isVideoStory(story) && !hasBlocks ? (
           <div className="mt-8">
             <AdSlot ads={videoAds} placementKey="video" articleId={story.id} />
           </div>
         ) : null}
 
-        <ArticleBody story={story} inlineAds={inlineAds} />
+        <ArticleBody
+          story={story}
+          inlineAds={inlineAds}
+          videoAds={hasBlocks ? videoAds : []}
+        />
 
         <div className="mt-10 lg:hidden">
           <AdSlot

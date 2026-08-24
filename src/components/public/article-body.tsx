@@ -85,9 +85,11 @@ function EmbedBlock({ block }: { block: ArticleBlock }) {
 export function ArticleBody({
   story,
   inlineAds,
+  videoAds = [],
 }: {
   story: PublicContentItem;
   inlineAds: ServedAd[];
+  videoAds?: ServedAd[];
 }) {
   const blocks = story.blocks ?? [];
   if (!hasRenderableBlocks(blocks)) {
@@ -102,22 +104,31 @@ export function ArticleBody({
     );
   }
 
+  const firstVideoIndex = blocks.findIndex(
+    (block) => block.type === "video" || block.type === "embed",
+  );
+
   return (
-    <div className="mt-10 space-y-8">
+    <div className="mt-10 space-y-8 overflow-x-hidden">
       {blocks.map((block, index) => {
         const afterAd =
           (index === 2 || index === 6) && inlineAds.length ? (
             <AdSlot
               ads={inlineAds}
               placementKey="article_inline"
-              articleId={undefined}
+              articleId={story.id}
               className="mt-8"
               variant="feed"
             />
           ) : null;
         return (
           <div key={block.id}>
-            <BlockView block={block} story={story} inlineAds={inlineAds} />
+            <BlockView
+              block={block}
+              story={story}
+              inlineAds={inlineAds}
+              videoAds={index === firstVideoIndex ? videoAds : []}
+            />
             {afterAd}
           </div>
         );
@@ -130,10 +141,12 @@ function BlockView({
   block,
   story,
   inlineAds,
+  videoAds,
 }: {
   block: ArticleBlock;
   story: PublicContentItem;
   inlineAds: ServedAd[];
+  videoAds: ServedAd[];
 }) {
   if (block.type === "heading") {
     return (
@@ -181,12 +194,21 @@ function BlockView({
     if (!block.media_url) return null;
     return (
       <figure>
+        {videoAds.length ? (
+          <AdSlot
+            ads={videoAds}
+            placementKey="video"
+            articleId={story.id}
+            className="mb-4"
+          />
+        ) : null}
         <div className="aspect-video overflow-hidden rounded-2xl bg-black">
           <video
             src={block.media_url}
             poster={block.thumbnail_url ?? undefined}
             controls
             preload="metadata"
+            playsInline
             className="size-full"
           />
         </div>
@@ -196,31 +218,53 @@ function BlockView({
       </figure>
     );
   }
-  if (block.type === "embed") return <EmbedBlock block={block} />;
+  if (block.type === "embed") {
+    return (
+      <div>
+        {videoAds.length ? (
+          <AdSlot
+            ads={videoAds}
+            placementKey="video"
+            articleId={story.id}
+            className="mb-4"
+          />
+        ) : null}
+        <EmbedBlock block={block} />
+      </div>
+    );
+  }
   if (block.type === "ad") {
     return (
       <AdSlot
         ads={inlineAds}
         placementKey="article_inline"
+        articleId={story.id}
         variant="feed"
       />
     );
   }
   if (block.type === "related_articles") {
-    const slugs = Array.isArray(block.metadata?.slugs)
-      ? (block.metadata.slugs as string[])
-      : String(block.content)
-          .split(/\s+/)
-          .map((item) => item.trim())
-          .filter(Boolean);
-    if (!slugs.length) return null;
+    const related = Array.isArray(block.metadata?.related)
+      ? (block.metadata.related as Array<{ slug?: string; title?: string }>)
+      : (Array.isArray(block.metadata?.slugs)
+          ? (block.metadata.slugs as string[])
+          : String(block.content)
+              .split(/\s+/)
+              .map((item) => item.trim())
+              .filter(Boolean)
+        ).map((slug) => ({ slug, title: slug }));
+    if (!related.length) return null;
     return (
       <aside className="rounded-2xl border border-white/[0.08] p-5">
         <p className="text-[10px] tracking-[0.18em] text-[#d3b176]">延伸閱讀</p>
         <div className="mt-3 space-y-2">
-          {slugs.map((slug) => (
-            <Link key={slug} href={`/article/${slug}`} className="block text-sm text-zinc-300 hover:text-white">
-              {slug}
+          {related.map((item) => (
+            <Link
+              key={item.slug}
+              href={`/article/${item.slug}`}
+              className="block text-sm text-zinc-300 hover:text-white"
+            >
+              {item.title || item.slug}
             </Link>
           ))}
         </div>

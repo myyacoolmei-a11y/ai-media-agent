@@ -2,11 +2,72 @@ import { addSignedAssetUrls } from "@/lib/content/access";
 import { hydrateBlockMedia, loadArticleBlocks } from "@/lib/content/blocks";
 import { isMissingRelation } from "@/lib/db/missing";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { ArticleBlock } from "@/types/blocks";
 import type {
   ContentAsset,
   ContentItem,
   PublicContentItem,
 } from "@/types/content";
+
+function coverUrlFromBlock(block: ArticleBlock | undefined) {
+  if (!block) return null;
+  if (Array.isArray(block.metadata?.items)) {
+    const items = block.metadata.items as Array<{ url?: string }>;
+    const marked = items.find((item) => Boolean((item as { cover?: boolean }).cover));
+    const first = marked ?? items[0];
+    if (typeof first?.url === "string" && first.url) return first.url;
+  }
+  return block.thumbnail_url ?? block.media_url ?? null;
+}
+
+function relatedSlugs(block: ArticleBlock) {
+  if (Array.isArray(block.metadata?.slugs)) {
+    return (block.metadata.slugs as unknown[])
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return String(block.content)
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+async function attachRelatedTitles(blocks: ArticleBlock[]): Promise<ArticleBlock[]> {
+  const slugs = [
+    ...new Set(
+      blocks
+        .filter((block) => block.type === "related_articles")
+        .flatMap(relatedSlugs),
+    ),
+  ];
+  if (!slugs.length) return blocks;
+  try {
+    const { data } = await createAdminClient()
+      .from("content_items")
+      .select("slug,title")
+      .in("slug", slugs)
+      .eq("status", "published");
+    const titles = new Map((data ?? []).map((row) => [row.slug, row.title]));
+    return blocks.map((block) => {
+      if (block.type !== "related_articles") return block;
+      return {
+        ...block,
+        metadata: {
+          ...block.metadata,
+          related: relatedSlugs(block).map((slug) => ({
+            slug,
+            title: titles.get(slug) ?? slug,
+          })),
+        },
+      };
+    });
+  } catch (error) {
+    if (error instanceof Error && isMissingRelation(error)) return blocks;
+    console.error("Failed to load related articles", error);
+    return blocks;
+  }
+}
 
 export async function serializePublicContent(
   content: ContentItem,
@@ -23,7 +84,7 @@ export async function serializePublicContent(
   );
   const cover = assets.find((asset) => asset.id === content.cover_asset_id);
   const rawBlocks = await loadArticleBlocks(content.id);
-  const blocks = await hydrateBlockMedia(rawBlocks);
+  const blocks = await attachRelatedTitles(await hydrateBlockMedia(rawBlocks));
 
   let sponsorName: string | null = null;
   if (content.sponsor_id) {
@@ -55,16 +116,7 @@ export async function serializePublicContent(
     summary: content.summary,
     content: content.content,
     videoUrl: content.video_url,
-    coverImage:
-      cover?.signed_url ??
-      (typeof coverBlock?.metadata?.items === "object" &&
-      Array.isArray(coverBlock.metadata.items) &&
-      typeof (coverBlock.metadata.items[0] as { url?: string } | undefined)?.url === "string"
-        ? (coverBlock.metadata.items[0] as { url: string }).url
-        : null) ??
-      coverBlock?.thumbnail_url ??
-      coverBlock?.media_url ??
-      null,
+    coverImage: cover?.signed_url ?? coverUrlFromBlock(coverBlock),
     category: content.category,
     contentType: content.content_type,
     status: "published",
