@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { loadArticleBlocks } from "@/lib/content/blocks";
 import { verifyContentAccess } from "@/lib/content/access";
 import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 
@@ -25,11 +26,20 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "狀態不正確。" }, { status: 400 });
   }
 
+  const blocks = await loadArticleBlocks(contentId);
+  const hasBody =
+    Boolean(access.content.content.trim()) ||
+    blocks.some(
+      (block) =>
+        block.content.trim() ||
+        block.media_url ||
+        (Array.isArray(block.metadata?.items) && block.metadata.items.length),
+    );
   if (
     payload.data.status === "published" &&
     (!access.content.title.trim() ||
       !access.content.summary.trim() ||
-      !access.content.content.trim())
+      !hasBody)
   ) {
     return NextResponse.json(
       { error: "發布前必須完成標題、摘要與內容。" },

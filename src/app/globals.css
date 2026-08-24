@@ -56,6 +56,18 @@ a {
   animation: float 5s ease-in-out infinite;
 }
 
+.article-media img,
+.article-media video {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.article-media iframe {
+  width: 100%;
+  max-width: 100%;
+}
+
 .editor-input {
   width: 100%;
   border-radius: 1rem;

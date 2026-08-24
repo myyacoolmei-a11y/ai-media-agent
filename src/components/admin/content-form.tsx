@@ -13,6 +13,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { SocialSyncPanel } from "@/components/admin/social-sync-panel";
+import {
+  BlockEditor,
+  toSavePayload,
+  type EditorBlock,
+} from "@/components/admin/block-editor";
 import { Button } from "@/components/ui/button";
 import {
   DEFAULT_CATEGORY,
@@ -32,6 +37,8 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import type { ContentItem, ContentType } from "@/types/content";
 import { contentTypeLabels } from "@/types/content";
+import { blocksToPlainText } from "@/lib/content/blocks";
+import type { ArticleBlock } from "@/types/blocks";
 
 type FormState = {
   id?: string;
@@ -46,6 +53,8 @@ type FormState = {
   cover_asset_id: string | null;
   cover_image: string | null;
   published_at: string | null;
+  sponsored: boolean;
+  sponsor_label: string;
 };
 
 function emptyForm(): FormState {
@@ -61,6 +70,8 @@ function emptyForm(): FormState {
     cover_asset_id: null,
     cover_image: null,
     published_at: null,
+    sponsored: false,
+    sponsor_label: "",
   };
 }
 
@@ -78,7 +89,64 @@ function fromContent(content: ContentItem): FormState {
     cover_asset_id: content.cover_asset_id,
     cover_image: content.cover_image ?? null,
     published_at: content.published_at,
+    sponsored: Boolean(content.sponsored),
+    sponsor_label: content.sponsor_label ?? "",
   };
+}
+
+function editorBlocksFromContent(content?: ContentItem): EditorBlock[] {
+  const source = content?.blocks?.length
+    ? content.blocks
+    : content
+      ? ([
+          content.content?.trim()
+            ? {
+                id: `legacy-text-${content.id}`,
+                article_id: content.id,
+                type: "text" as const,
+                sort_order: 0,
+                content: content.content,
+                media_url: null,
+                thumbnail_url: null,
+                caption: "",
+                source: "",
+                alt_text: "",
+                metadata: {},
+                created_at: content.updated_at,
+                updated_at: content.updated_at,
+              }
+            : null,
+          content.video_url
+            ? {
+                id: `legacy-embed-${content.id}`,
+                article_id: content.id,
+                type: "embed" as const,
+                sort_order: 1,
+                content: "",
+                media_url: content.video_url,
+                thumbnail_url: null,
+                caption: "",
+                source: "",
+                alt_text: "",
+                metadata: { url: content.video_url },
+                created_at: content.updated_at,
+                updated_at: content.updated_at,
+              }
+            : null,
+        ].filter(Boolean) as ArticleBlock[])
+      : [];
+  return source.map((block) => ({
+    clientId: block.id,
+    id: block.id.startsWith("legacy-") ? undefined : block.id,
+    type: block.type,
+    content: block.content,
+    mediaUrl: block.media_url,
+    thumbnailUrl: block.thumbnail_url,
+    caption: block.caption,
+    source: block.source,
+    altText: block.alt_text,
+    metadata: block.metadata ?? {},
+  }));
 }
 
 export function ContentForm({
@@ -100,6 +168,9 @@ export function ContentForm({
   const [saved, setSaved] = useState(false);
   const [seoKeywords, setSeoKeywords] = useState("");
   const [hashtagsText, setHashtagsText] = useState("");
+  const [blocks, setBlocks] = useState<EditorBlock[]>(() =>
+    editorBlocksFromContent(initialContent),
+  );
 
   useEffect(() => {
     const draft = readAssistantHandoffDraft();
@@ -138,6 +209,8 @@ export function ContentForm({
       styleProfileId: null,
       coverAssetId: next.cover_asset_id,
       publishedAt: next.published_at ?? "",
+      sponsored: next.sponsored,
+      sponsorLabel: next.sponsor_label,
     };
   }
 
@@ -252,7 +325,7 @@ export function ContentForm({
       if (!next.title.trim()) {
         throw new Error("請先填寫標題。");
       }
-      if (nextStatus === "published" && (!next.summary.trim() || !next.content.trim())) {
+      if (nextStatus === "published" && (!next.summary.trim() || (!next.content.trim() && !blocks.some((block) => block.content.trim() || block.mediaUrl || (Array.isArray(block.metadata.items) && block.metadata.items.length))))) {
         throw new Error("發布前必須完成摘要與內文。");
       }
 
@@ -280,8 +353,39 @@ export function ContentForm({
         setCoverPreview(withCover.cover_image ?? null);
       }
 
-      const savedContent = await saveFields(next);
+      const savedContent = await saveFields({
+        ...next,
+        content: blocksToPlainText(
+          blocks.map((block, index) => ({
+            id: block.id ?? block.clientId,
+            article_id: next.id ?? "",
+            type: block.type,
+            sort_order: index,
+            content: block.content,
+            media_url: block.mediaUrl,
+            thumbnail_url: block.thumbnailUrl,
+            caption: block.caption,
+            source: block.source,
+            alt_text: block.altText,
+            metadata: block.metadata,
+            created_at: "",
+            updated_at: "",
+          })),
+        ) || next.content,
+      });
       next = { ...next, ...fromContent(savedContent) };
+
+      if (next.id) {
+        const blockResponse = await fetch(`/api/contents/${next.id}/blocks`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blocks: toSavePayload(blocks) }),
+        });
+        const blockBody = (await blockResponse.json()) as { error?: string };
+        if (!blockResponse.ok && blockResponse.status !== 409) {
+          throw new Error(blockBody.error || "內容區塊儲存失敗。");
+        }
+      }
 
       if (nextStatus === "published" && next.id) {
         const published = await setStatus(next.id, "published");
@@ -428,21 +532,39 @@ export function ContentForm({
             placeholder="前台列表與首頁會顯示這段摘要"
           />
         </label>
-        <label className="block">
-          <span className="mb-2 block text-xs text-zinc-400">內文</span>
-          <textarea
-            rows={16}
-            value={article.content}
-            onChange={(event) =>
-              setArticle((current) => ({
-                ...current,
-                content: event.target.value,
-              }))
-            }
-            className="editor-input min-h-80 resize-y leading-8"
-            placeholder="完整報導內文"
-          />
-        </label>
+        <BlockEditor
+          blocks={blocks}
+          onChange={setBlocks}
+          ensureArticleId={async () => {
+            if (article.id) return article.id;
+            const created = await createDraft({
+              ...article,
+              slug: article.slug || createContentSlug(article.title || "draft"),
+            });
+            const next = { ...article, ...fromContent(created), id: created.id };
+            setArticle(next);
+            router.replace(`/admin/content/${created.id}/edit`);
+            return created.id;
+          }}
+          onSetCover={(url) => {
+            setCoverPreview(url);
+            setArticle((current) => ({ ...current, cover_image: url }));
+            setBlocks((current) =>
+              current.map((block) => ({
+                ...block,
+                metadata: {
+                  ...block.metadata,
+                  cover:
+                    block.mediaUrl === url ||
+                    (Array.isArray(block.metadata.items) &&
+                      (block.metadata.items as Array<{ url?: string }>).some(
+                        (item) => item.url === url,
+                      )),
+                },
+              })),
+            );
+          }}
+        />
 
         <div className="grid gap-5 sm:grid-cols-2">
           <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
@@ -595,6 +717,37 @@ export function ContentForm({
             />
           </label>
         </div>
+
+        <label className="flex items-start gap-3 rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={article.sponsored}
+            onChange={(event) =>
+              setArticle((current) => ({
+                ...current,
+                sponsored: event.target.checked,
+              }))
+            }
+          />
+          <span>
+            <span className="block text-xs text-zinc-400">品牌合作／贊助文章</span>
+            <input
+              value={article.sponsor_label}
+              onChange={(event) =>
+                setArticle((current) => ({
+                  ...current,
+                  sponsor_label: event.target.value,
+                }))
+              }
+              placeholder="本篇內容由 XXX 合作呈現"
+              className="mt-3 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs outline-none"
+            />
+            <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+              勾選後會在標題附近清楚標示，不會看起來像一般新聞。
+            </p>
+          </span>
+        </label>
 
         <SocialSyncPanel
           article={article}

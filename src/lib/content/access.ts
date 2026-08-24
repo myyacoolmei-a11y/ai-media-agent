@@ -1,4 +1,5 @@
 import { getPreviewDemoContentItem } from "@/lib/content/preview-demo";
+import { hydrateBlockMedia, loadArticleBlocks } from "@/lib/content/blocks";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { isPreviewDemo } from "@/lib/preview";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -66,10 +67,12 @@ export async function loadContentWithAssets(
   );
   const cover =
     assets.find((asset) => asset.id === content.cover_asset_id) ?? null;
+  const blocks = await hydrateBlockMedia(await loadArticleBlocks(content.id));
 
   return {
     ...content,
     assets,
     cover_image: cover?.signed_url ?? null,
+    blocks,
   };
 }
