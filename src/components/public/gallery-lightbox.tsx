@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ export function GalleryLightbox({
   carousel?: boolean;
 }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [mounted, setMounted] = useState(false);
   const startX = useRef(0);
   const current = openIndex === null ? null : items[openIndex];
 
@@ -30,6 +32,10 @@ export function GalleryLightbox({
       return (index + delta + items.length) % items.length;
     });
   }
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (openIndex === null) return;
@@ -49,6 +55,67 @@ export function GalleryLightbox({
 
   if (!items.length) return null;
 
+  const overlay =
+    current?.url && mounted ? (
+      <div
+        className="fixed inset-0 z-[80] flex flex-col bg-black/90 p-4"
+        onClick={() => setOpenIndex(null)}
+        onTouchStart={(event) => {
+          startX.current = event.changedTouches[0]?.clientX ?? 0;
+        }}
+        onTouchEnd={(event) => {
+          const dx = (event.changedTouches[0]?.clientX ?? 0) - startX.current;
+          if (dx > 40) go(-1);
+          if (dx < -40) go(1);
+        }}
+      >
+        <div className="flex items-center justify-between text-xs text-zinc-400">
+          <span>
+            {openIndex! + 1} / {items.length}
+          </span>
+          <button type="button" onClick={() => setOpenIndex(null)}>
+            關閉
+          </button>
+        </div>
+        <div
+          className="flex min-h-0 flex-1 items-center justify-center"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={current.url}
+            alt={current.alt || current.caption || ""}
+            className="max-h-full max-w-full object-contain"
+          />
+        </div>
+        {current.caption ? (
+          <p className="mt-3 text-center text-sm text-zinc-300">{current.caption}</p>
+        ) : null}
+        <div className="mt-3 flex justify-center gap-3">
+          <button
+            type="button"
+            className="rounded-full border border-white/15 px-4 py-2 text-xs"
+            onClick={(event) => {
+              event.stopPropagation();
+              go(-1);
+            }}
+          >
+            上一張
+          </button>
+          <button
+            type="button"
+            className="rounded-full border border-white/15 px-4 py-2 text-xs"
+            onClick={(event) => {
+              event.stopPropagation();
+              go(1);
+            }}
+          >
+            下一張
+          </button>
+        </div>
+      </div>
+    ) : null;
+
   return (
     <>
       <div className={className}>
@@ -57,7 +124,7 @@ export function GalleryLightbox({
             key={`${item.url}-${index}`}
             type="button"
             className={cn(
-              "block text-left",
+              "block min-h-24 text-left",
               carousel ? "min-w-[80%] shrink-0 snap-start sm:min-w-[45%]" : "w-full",
             )}
             onClick={() => setOpenIndex(index)}
@@ -78,65 +145,7 @@ export function GalleryLightbox({
           </button>
         ))}
       </div>
-      {current?.url ? (
-        <div
-          className="fixed inset-0 z-50 flex flex-col bg-black/90 p-4"
-          onClick={() => setOpenIndex(null)}
-          onTouchStart={(event) => {
-            startX.current = event.changedTouches[0]?.clientX ?? 0;
-          }}
-          onTouchEnd={(event) => {
-            const dx = (event.changedTouches[0]?.clientX ?? 0) - startX.current;
-            if (dx > 40) go(-1);
-            if (dx < -40) go(1);
-          }}
-        >
-          <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>
-              {openIndex! + 1} / {items.length}
-            </span>
-            <button type="button" onClick={() => setOpenIndex(null)}>
-              關閉
-            </button>
-          </div>
-          <div
-            className="flex min-h-0 flex-1 items-center justify-center"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={current.url}
-              alt={current.alt || current.caption || ""}
-              className="max-h-full max-w-full object-contain"
-            />
-          </div>
-          {current.caption ? (
-            <p className="mt-3 text-center text-sm text-zinc-300">{current.caption}</p>
-          ) : null}
-          <div className="mt-3 flex justify-center gap-3">
-            <button
-              type="button"
-              className="rounded-full border border-white/15 px-4 py-2 text-xs"
-              onClick={(event) => {
-                event.stopPropagation();
-                go(-1);
-              }}
-            >
-              上一張
-            </button>
-            <button
-              type="button"
-              className="rounded-full border border-white/15 px-4 py-2 text-xs"
-              onClick={(event) => {
-                event.stopPropagation();
-                go(1);
-              }}
-            >
-              下一張
-            </button>
-          </div>
-        </div>
-      ) : null}
+      {overlay ? createPortal(overlay, document.body) : null}
     </>
   );
 }
