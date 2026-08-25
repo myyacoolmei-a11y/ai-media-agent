@@ -12,7 +12,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { ArticleBlockEditor } from "@/components/admin/article-block-editor";
 import { Button } from "@/components/ui/button";
+import {
+  MAX_ARTICLE_IMAGE_BLOCKS,
+  MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE,
+  blocksToPlainText,
+  countImageBlocks,
+  hasPublishableArticleBody,
+  hydrateArticleBlocksFromContent,
+  withoutCoverImageBlocks,
+  type ArticleBlock,
+} from "@/lib/content/article-blocks";
 import {
   DEFAULT_CATEGORY,
   MEDIA_SECTIONS,
@@ -90,6 +101,10 @@ export function ContentForm({
   const [coverPreview, setCoverPreview] = useState(
     initialContent?.cover_image ?? null,
   );
+  const [blocks, setBlocks] = useState<ArticleBlock[]>(() =>
+    hydrateArticleBlocksFromContent(initialContent ?? { content: "" }),
+  );
+  const [uploadingBlockId, setUploadingBlockId] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -100,18 +115,23 @@ export function ContentForm({
     };
   }, [coverPreview]);
 
-  function payload(next: FormState) {
+  function payload(next: FormState, nextBlocks = blocks) {
+    const bodyBlocks = withoutCoverImageBlocks(
+      nextBlocks,
+      next.cover_asset_id,
+    );
     return {
       title: next.title,
       slug: next.slug || createContentSlug(next.title),
       summary: next.summary,
-      content: next.content,
+      content: blocksToPlainText(bodyBlocks) || next.content,
       videoUrl: normalizeVideoUrl(next.video_url),
       category: next.category || DEFAULT_CATEGORY,
       contentType: next.content_type,
       styleProfileId: null,
       coverAssetId: next.cover_asset_id,
       publishedAt: next.published_at ?? "",
+      articleBlocks: bodyBlocks,
     };
   }
 
@@ -134,12 +154,12 @@ export function ContentForm({
     return body.content;
   }
 
-  async function saveFields(next: FormState) {
+  async function saveFields(next: FormState, nextBlocks = blocks) {
     if (!next.id) throw new Error("找不到內容。");
     const response = await fetch(`/api/contents/${next.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload(next)),
+      body: JSON.stringify(payload(next, nextBlocks)),
     });
     const body = (await response.json()) as {
       content?: ContentItem;
@@ -151,7 +171,7 @@ export function ContentForm({
     return body.content;
   }
 
-  async function uploadCover(contentId: string, file: File) {
+  async function uploadImageAsset(contentId: string, file: File) {
     const prepareResponse = await fetch(`/api/contents/${contentId}/assets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -168,7 +188,7 @@ export function ContentForm({
       error?: string;
     };
     if (!prepareResponse.ok || !prepared.asset || !prepared.upload) {
-      throw new Error(prepared.error || "無法準備封面上傳。");
+      throw new Error(prepared.error || "無法準備圖片上傳。");
     }
     const { error: uploadError } = await createClient()
       .storage.from("content-media")
@@ -180,7 +200,7 @@ export function ContentForm({
       `/api/contents/${contentId}/assets/${prepared.asset.id}/complete`,
       { method: "POST" },
     );
-    if (!complete.ok) throw new Error("封面驗證失敗。");
+    if (!complete.ok) throw new Error("圖片驗證失敗。");
     const refreshed = await fetch(`/api/contents/${contentId}`, {
       cache: "no-store",
     });
@@ -189,6 +209,18 @@ export function ContentForm({
       (asset) => asset.id === prepared.asset?.id,
     );
     if (!data.content || !uploadedAsset) {
+      throw new Error("無法讀取已上傳圖片。");
+    }
+    return uploadedAsset;
+  }
+
+  async function uploadCover(contentId: string, file: File) {
+    const uploadedAsset = await uploadImageAsset(contentId, file);
+    const refreshed = await fetch(`/api/contents/${contentId}`, {
+      cache: "no-store",
+    });
+    const data = (await refreshed.json()) as { content?: ContentItem };
+    if (!data.content) {
       throw new Error("無法讀取已上傳封面。");
     }
     return {
@@ -196,6 +228,61 @@ export function ContentForm({
       cover_asset_id: uploadedAsset.id,
       cover_image: uploadedAsset.signed_url ?? null,
     } satisfies ContentItem;
+  }
+
+  async function ensureArticleId(next = article) {
+    if (next.id) return next;
+    if (!next.title.trim()) {
+      throw new Error("請先填寫標題，才能上傳內文圖片。");
+    }
+    const created = await createDraft({
+      ...next,
+      slug: normalizeSlug(next.slug) || createContentSlug(next.title),
+    });
+    const withId = {
+      ...fromContent(created),
+      ...next,
+      id: created.id,
+      slug: created.slug,
+    };
+    setArticle(withId);
+    router.replace(`/admin/content/${created.id}/edit`);
+    return withId;
+  }
+
+  async function uploadBodyImage(blockId: string, file: File) {
+    if (!file.type.startsWith("image/")) {
+      setError("內文圖片必須是圖片檔案。");
+      return;
+    }
+    setError("");
+    setUploadingBlockId(blockId);
+    try {
+      const current = await ensureArticleId();
+      if (!current.id) throw new Error("找不到內容。");
+      const uploaded = await uploadImageAsset(current.id, file);
+      const nextBlocks = blocks.map((block) =>
+        block.id === blockId && block.type === "image"
+          ? {
+              ...block,
+              data: {
+                ...block.data,
+                url: uploaded.signed_url ?? "",
+                assetId: uploaded.id,
+              },
+            }
+          : block,
+      );
+      setBlocks(nextBlocks);
+      const saved = await saveFields(current, nextBlocks);
+      setBlocks(hydrateArticleBlocksFromContent(saved));
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error ? uploadError.message : "內文圖片上傳失敗。",
+      );
+    } finally {
+      setUploadingBlockId("");
+    }
   }
 
   async function setStatus(contentId: string, status: "draft" | "published") {
@@ -226,7 +313,16 @@ export function ContentForm({
       if (!next.title.trim()) {
         throw new Error("請先填寫標題。");
       }
-      if (nextStatus === "published" && (!next.summary.trim() || !next.content.trim())) {
+      if (
+        countImageBlocks(withoutCoverImageBlocks(blocks, next.cover_asset_id)) >
+        MAX_ARTICLE_IMAGE_BLOCKS
+      ) {
+        throw new Error(MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE);
+      }
+      if (
+        nextStatus === "published" &&
+        (!next.summary.trim() || !hasPublishableArticleBody(blocks))
+      ) {
         throw new Error("發布前必須完成摘要與內文。");
       }
 
@@ -254,8 +350,15 @@ export function ContentForm({
         setCoverPreview(withCover.cover_image ?? null);
       }
 
-      const savedContent = await saveFields(next);
-      next = { ...next, ...fromContent(savedContent) };
+      const savedContent = await saveFields(next, blocks);
+      next = {
+        ...next,
+        ...fromContent(savedContent),
+        content: blocksToPlainText(blocks) || next.content,
+      };
+      if (Array.isArray(savedContent.article_blocks)) {
+        setBlocks(hydrateArticleBlocksFromContent(savedContent));
+      }
 
       if (nextStatus === "published" && next.id) {
         const published = await setStatus(next.id, "published");
@@ -402,25 +505,21 @@ export function ContentForm({
             placeholder="前台列表與首頁會顯示這段摘要"
           />
         </label>
-        <label className="block">
-          <span className="mb-2 block text-xs text-zinc-400">內文</span>
-          <textarea
-            rows={16}
-            value={article.content}
-            onChange={(event) =>
-              setArticle((current) => ({
-                ...current,
-                content: event.target.value,
-              }))
-            }
-            className="editor-input min-h-80 resize-y leading-8"
-            placeholder="完整報導內文"
-          />
-        </label>
+        <ArticleBlockEditor
+          blocks={blocks}
+          onChange={setBlocks}
+          disabled={Boolean(busy)}
+          uploadingId={uploadingBlockId}
+          onUploadImage={uploadBodyImage}
+          onError={setError}
+        />
 
         <div className="grid gap-5 sm:grid-cols-2">
           <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
             <p className="text-xs text-zinc-400">封面圖片</p>
+            <p className="mt-1 text-[11px] leading-5 text-zinc-600">
+              封面只能 1 張，用於列表與分享。內文圖片請在上方文章內容插入。
+            </p>
             {preview ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

@@ -1,3 +1,4 @@
+import { hydrateArticleBlocksFromContent } from "@/lib/content/article-blocks";
 import { getPreviewDemoContentItem } from "@/lib/content/preview-demo";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { isPreviewDemo } from "@/lib/preview";
@@ -46,10 +47,14 @@ export async function loadContentWithAssets(
   expiresIn = 3600,
 ) {
   if (isPreviewDemo()) {
-    return {
+    const hydrated = {
       ...content,
       assets: [] as ContentAsset[],
       cover_image: content.cover_image ?? null,
+    };
+    return {
+      ...hydrated,
+      article_blocks: hydrateArticleBlocksFromContent(hydrated),
     };
   }
 
@@ -67,9 +72,13 @@ export async function loadContentWithAssets(
   const cover =
     assets.find((asset) => asset.id === content.cover_asset_id) ?? null;
 
-  return {
+  const hydrated = {
     ...content,
     assets,
     cover_image: cover?.signed_url ?? null,
+  };
+  return {
+    ...hydrated,
+    article_blocks: hydrateArticleBlocksFromContent(hydrated),
   };
 }
