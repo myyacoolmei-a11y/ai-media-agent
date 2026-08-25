@@ -12,6 +12,7 @@ import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   MAX_ARTICLE_IMAGE_BLOCKS,
+  MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE,
   countImageBlocks,
   emptyImageBlock,
   emptyTextBlock,
@@ -25,12 +26,14 @@ export function ArticleBlockEditor({
   onUploadImage,
   disabled,
   uploadingId,
+  onError,
 }: {
   blocks: ArticleBlock[];
   onChange: (blocks: ArticleBlock[]) => void;
   onUploadImage: (blockId: string, file: File) => Promise<void> | void;
   disabled?: boolean;
   uploadingId?: string;
+  onError?: (message: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const targetId = useRef("");
@@ -46,7 +49,11 @@ export function ArticleBlockEditor({
   }
 
   function addImage() {
-    if (atImageLimit) return;
+    if (countImageBlocks(blocks) >= MAX_ARTICLE_IMAGE_BLOCKS) {
+      onError?.(MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE);
+      return;
+    }
+    onError?.("");
     onChange([...blocks, emptyImageBlock()]);
   }
 
@@ -138,7 +145,7 @@ export function ArticleBlockEditor({
                   <img
                     src={block.data.url}
                     alt={block.data.caption || "內文圖片"}
-                    className="h-auto w-full max-w-full rounded-2xl object-contain"
+                    className="block h-auto w-full max-w-full rounded-2xl object-contain"
                   />
                 ) : (
                   <button
@@ -213,15 +220,15 @@ export function ArticleBlockEditor({
           type="button"
           size="sm"
           variant="secondary"
-          disabled={disabled || atImageLimit}
+          disabled={disabled}
           onClick={addImage}
         >
           ＋ 圖片
         </Button>
       </div>
       {atImageLimit ? (
-        <p className="mt-2 text-[11px] text-zinc-600">
-          一篇文章最多 {MAX_ARTICLE_IMAGE_BLOCKS} 張內文圖片。
+        <p className="mt-2 text-[11px] text-red-200">
+          {MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE}
         </p>
       ) : (
         <p className="mt-2 text-[11px] text-zinc-600">

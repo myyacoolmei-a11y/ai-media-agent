@@ -7,9 +7,11 @@ import {
 } from "@/lib/content/access";
 import {
   MAX_ARTICLE_IMAGE_BLOCKS,
+  MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE,
   articleBlocksSchema,
   countImageBlocks,
   toStoredArticleBlocks,
+  withoutCoverImageBlocks,
 } from "@/lib/content/article-blocks";
 import { parseOptionalIsoDate } from "@/lib/content/dates";
 import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
@@ -76,14 +78,20 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
+  let storedArticleBlocks = payload.data.articleBlocks;
   if (payload.data.articleBlocks) {
-    if (countImageBlocks(payload.data.articleBlocks) > MAX_ARTICLE_IMAGE_BLOCKS) {
+    const bodyBlocks = withoutCoverImageBlocks(
+      payload.data.articleBlocks,
+      payload.data.coverAssetId,
+    );
+    if (countImageBlocks(bodyBlocks) > MAX_ARTICLE_IMAGE_BLOCKS) {
       return NextResponse.json(
-        { error: `一篇文章最多 ${MAX_ARTICLE_IMAGE_BLOCKS} 張內文圖片。` },
+        { error: MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE },
         { status: 400 },
       );
     }
-    const imageAssetIds = payload.data.articleBlocks.flatMap((block) =>
+    storedArticleBlocks = bodyBlocks;
+    const imageAssetIds = bodyBlocks.flatMap((block) =>
       block.type === "image" && block.data.assetId ? [block.data.assetId] : [],
     );
     if (imageAssetIds.length) {
@@ -137,9 +145,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       ...(publishedAt.value !== undefined
         ? { published_at: publishedAt.value }
         : {}),
-      ...(payload.data.articleBlocks
+      ...(storedArticleBlocks
         ? {
-            article_blocks: toStoredArticleBlocks(payload.data.articleBlocks),
+            article_blocks: toStoredArticleBlocks(storedArticleBlocks),
           }
         : {}),
     })

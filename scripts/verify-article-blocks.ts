@@ -7,14 +7,17 @@ import { ArticleBody } from "../src/components/public/article-body.tsx";
 
 import {
   MAX_ARTICLE_IMAGE_BLOCKS,
+  MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE,
   blocksToPlainText,
   countImageBlocks,
   emptyImageBlock,
   emptyTextBlock,
   hydrateArticleBlocks,
+  hydrateArticleBlocksFromContent,
   moveArticleBlock,
   toPublicArticleBlocks,
   toStoredArticleBlocks,
+  withoutCoverImageBlocks,
 } from "../src/lib/content/article-blocks.ts";
 import type { ContentAsset } from "../src/types/content.ts";
 
@@ -139,6 +142,37 @@ assert.match(html, /body-1\.jpg/);
 assert.match(html, /body-5\.jpg/);
 assert.match(html, /h-auto w-full max-w-full object-contain/);
 assert.doesNotMatch(html, /cover\.jpg/);
+assert.match(html, /overflow-hidden/);
+
+const mixedWithCover = [
+  ...draft,
+  {
+    ...emptyImageBlock(),
+    data: {
+      url: cover.signed_url ?? "",
+      caption: "封面誤入內文",
+      assetId: cover.id,
+    },
+  },
+];
+assert.equal(
+  countImageBlocks(withoutCoverImageBlocks(mixedWithCover, cover.id)),
+  5,
+);
+const reloadedWithoutCover = hydrateArticleBlocksFromContent({
+  article_blocks: toStoredArticleBlocks(mixedWithCover),
+  content: "",
+  assets: [cover, ...body],
+  cover_asset_id: cover.id,
+});
+assert.equal(countImageBlocks(reloadedWithoutCover), 5);
+assert.ok(
+  !reloadedWithoutCover.some(
+    (block) => block.type === "image" && block.data.assetId === cover.id,
+  ),
+);
+
+assert.equal(MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE, "每篇文章最多 20 張內文圖片");
 writeFileSync(
   "/tmp/article-body-five-images.html",
   `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>內文 5 圖驗證</title>
@@ -154,7 +188,12 @@ const tooMany = Array.from({ length: MAX_ARTICLE_IMAGE_BLOCKS + 1 }, () =>
   emptyImageBlock(),
 );
 assert.equal(countImageBlocks(tooMany), 21);
-assert.ok(countImageBlocks(tooMany) > MAX_ARTICLE_IMAGE_BLOCKS);
+assert.equal(
+  countImageBlocks(tooMany) > MAX_ARTICLE_IMAGE_BLOCKS
+    ? MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE
+    : "",
+  MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE,
+);
 
 const legacy = hydrateArticleBlocks([], "舊文章純文字", []);
 assert.equal(legacy.length, 1);

@@ -2,6 +2,7 @@ import type { ContentAsset } from "@/types/content";
 import { z } from "zod";
 
 export const MAX_ARTICLE_IMAGE_BLOCKS = 20;
+export const MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE = "每篇文章最多 20 張內文圖片";
 
 const textBlockSchema = z.object({
   id: z.string().min(1).max(80),
@@ -54,6 +55,16 @@ export function emptyImageBlock(): ArticleImageBlock {
 
 export function countImageBlocks(blocks: ArticleBlock[]) {
   return blocks.filter((block) => block.type === "image").length;
+}
+
+export function withoutCoverImageBlocks(
+  blocks: ArticleBlock[],
+  coverAssetId?: string | null,
+) {
+  if (!coverAssetId) return blocks;
+  return blocks.filter(
+    (block) => !(block.type === "image" && block.data.assetId === coverAssetId),
+  );
 }
 
 export function blocksToPlainText(blocks: ArticleBlock[]) {
@@ -177,11 +188,15 @@ export function hydrateArticleBlocksFromContent(content: {
   article_blocks?: unknown;
   content?: string;
   assets?: ContentAsset[];
+  cover_asset_id?: string | null;
 }) {
-  return hydrateArticleBlocks(
-    content.article_blocks,
-    content.content ?? "",
-    content.assets ?? [],
+  return withoutCoverImageBlocks(
+    hydrateArticleBlocks(
+      content.article_blocks,
+      content.content ?? "",
+      content.assets ?? [],
+    ),
+    content.cover_asset_id,
   );
 }
 

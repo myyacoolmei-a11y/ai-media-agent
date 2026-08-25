@@ -49,7 +49,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const sectionHref = categoryHref(story.category);
 
   return (
-    <article className="mx-auto max-w-3xl">
+    <article className="mx-auto w-full max-w-3xl overflow-x-hidden">
       <p className="text-xs text-[#d3b176]">
         <Link href={sectionHref} className="hover:text-white">
           {category}

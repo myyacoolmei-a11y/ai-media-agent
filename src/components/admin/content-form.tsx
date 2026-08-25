@@ -15,9 +15,13 @@ import { useEffect, useRef, useState } from "react";
 import { ArticleBlockEditor } from "@/components/admin/article-block-editor";
 import { Button } from "@/components/ui/button";
 import {
+  MAX_ARTICLE_IMAGE_BLOCKS,
+  MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE,
   blocksToPlainText,
+  countImageBlocks,
   hasPublishableArticleBody,
   hydrateArticleBlocksFromContent,
+  withoutCoverImageBlocks,
   type ArticleBlock,
 } from "@/lib/content/article-blocks";
 import {
@@ -112,18 +116,22 @@ export function ContentForm({
   }, [coverPreview]);
 
   function payload(next: FormState, nextBlocks = blocks) {
+    const bodyBlocks = withoutCoverImageBlocks(
+      nextBlocks,
+      next.cover_asset_id,
+    );
     return {
       title: next.title,
       slug: next.slug || createContentSlug(next.title),
       summary: next.summary,
-      content: blocksToPlainText(nextBlocks) || next.content,
+      content: blocksToPlainText(bodyBlocks) || next.content,
       videoUrl: normalizeVideoUrl(next.video_url),
       category: next.category || DEFAULT_CATEGORY,
       contentType: next.content_type,
       styleProfileId: null,
       coverAssetId: next.cover_asset_id,
       publishedAt: next.published_at ?? "",
-      articleBlocks: nextBlocks,
+      articleBlocks: bodyBlocks,
     };
   }
 
@@ -304,6 +312,12 @@ export function ContentForm({
       };
       if (!next.title.trim()) {
         throw new Error("請先填寫標題。");
+      }
+      if (
+        countImageBlocks(withoutCoverImageBlocks(blocks, next.cover_asset_id)) >
+        MAX_ARTICLE_IMAGE_BLOCKS
+      ) {
+        throw new Error(MAX_ARTICLE_IMAGE_BLOCKS_MESSAGE);
       }
       if (
         nextStatus === "published" &&
@@ -497,6 +511,7 @@ export function ContentForm({
           disabled={Boolean(busy)}
           uploadingId={uploadingBlockId}
           onUploadImage={uploadBodyImage}
+          onError={setError}
         />
 
         <div className="grid gap-5 sm:grid-cols-2">
