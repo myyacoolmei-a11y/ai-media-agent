@@ -30,7 +30,7 @@ export function PublicHeader() {
           </span>
         </Link>
         <div className="ml-auto flex items-center gap-4">
-          <p className="hidden text-[11px] tracking-wide text-zinc-500 sm:block">
+          <p suppressHydrationWarning className="hidden text-[11px] tracking-wide text-zinc-500 sm:block">
             {today}
           </p>
           <AccountMenu />
