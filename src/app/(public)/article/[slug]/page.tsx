@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ArticleBody } from "@/components/public/article-body";
 import { StoryVideo } from "@/components/public/story-video";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/brand";
 import { categoryHref, displayCategory } from "@/lib/content/categories";
@@ -84,7 +85,9 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         ) : null}
       </div>
 
-      {story.content ? (
+      {story.articleBlocks?.length ? (
+        <ArticleBody blocks={story.articleBlocks} title={story.title} />
+      ) : story.content ? (
         <div className="mt-12 whitespace-pre-wrap border-t border-white/[0.07] pt-10 text-base leading-9 text-zinc-300">
           {story.content}
         </div>

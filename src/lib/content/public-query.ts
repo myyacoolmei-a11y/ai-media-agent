@@ -1,4 +1,8 @@
 import { addSignedAssetUrls } from "@/lib/content/access";
+import {
+  hydrateArticleBlocksFromContent,
+  toPublicArticleBlocks,
+} from "@/lib/content/article-blocks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   ContentAsset,
@@ -20,6 +24,12 @@ export async function serializePublicContent(
     60 * 60 * 24,
   );
   const cover = assets.find((asset) => asset.id === content.cover_asset_id);
+  const articleBlocks = toPublicArticleBlocks(
+    hydrateArticleBlocksFromContent({
+      ...content,
+      assets,
+    }),
+  );
 
   return {
     title: content.title,
@@ -37,5 +47,6 @@ export async function serializePublicContent(
       url: asset.signed_url ?? "",
       alt: asset.alt_text,
     })),
+    articleBlocks,
   };
 }

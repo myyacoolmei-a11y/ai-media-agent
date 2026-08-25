@@ -1,4 +1,5 @@
 import { storyMatchesTaxonomy } from "@/lib/content/categories";
+import type { ArticleBlock } from "@/lib/content/article-blocks";
 import type { ContentItem, PublicContentItem } from "@/types/content";
 
 const now = "2026-08-17T02:00:00.000Z";
@@ -30,6 +31,31 @@ export const previewDemoStories: Array<PublicContentItem & { id: string }> = [
     category: "地方/城市焦點",
     contentType: "article",
     publishedAt: "2026-08-17T01:30:00.000Z",
+    articleBlocks: [
+      { type: "text", data: { text: "第一段文字：廊道夜間照明先完成連續路燈，再談週末市集。" } },
+      {
+        type: "image",
+        data: { url: "/file.svg", caption: "圖說一：沿線市場出入口" },
+      },
+      { type: "text", data: { text: "第二段文字：機車改走平行巷道，行人燈號在三處增設。" } },
+      {
+        type: "image",
+        data: { url: "/globe.svg", caption: "圖說二：慢行優先時段" },
+      },
+      {
+        type: "image",
+        data: { url: "/next.svg", caption: "圖說三：舊鐵道帶現況" },
+      },
+      { type: "text", data: { text: "第三段文字：後續三個月依人流調整班距與臨停格。" } },
+      {
+        type: "image",
+        data: { url: "/vercel.svg", caption: "圖說四：夜間照明示範" },
+      },
+      {
+        type: "image",
+        data: { url: "/window.svg", caption: "圖說五：散場動線" },
+      },
+    ],
   }),
   story({
     id: "preview-local-taichung",
@@ -354,6 +380,24 @@ export function getPreviewDemoContentItems(): ContentItem[] {
     created_at: now,
     updated_at: item.publishedAt,
     cover_image: item.coverImage,
+    article_blocks: (item.articleBlocks ?? []).map(
+      (block, index): ArticleBlock =>
+        block.type === "text"
+          ? {
+              id: `${item.id}-text-${index}`,
+              type: "text",
+              data: { text: block.data.text },
+            }
+          : {
+              id: `${item.id}-image-${index}`,
+              type: "image",
+              data: {
+                url: block.data.url,
+                caption: block.data.caption,
+                assetId: null,
+              },
+            },
+    ),
   }));
 }
 

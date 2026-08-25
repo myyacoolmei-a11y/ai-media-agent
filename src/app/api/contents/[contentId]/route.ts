@@ -5,9 +5,15 @@ import {
   loadContentWithAssets,
   verifyContentAccess,
 } from "@/lib/content/access";
+import {
+  MAX_ARTICLE_IMAGE_BLOCKS,
+  articleBlocksSchema,
+  countImageBlocks,
+  toStoredArticleBlocks,
+} from "@/lib/content/article-blocks";
 import { parseOptionalIsoDate } from "@/lib/content/dates";
 import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
-import { contentInputSchema } from "@/types/content";
+import { contentInputSchema, type ContentItem } from "@/types/content";
 
 type RouteContext = {
   params: Promise<{ contentId: string }>;
@@ -15,6 +21,7 @@ type RouteContext = {
 
 const updateSchema = contentInputSchema.extend({
   coverAssetId: z.string().uuid().nullable(),
+  articleBlocks: articleBlocksSchema.optional(),
 });
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -69,6 +76,34 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
+  if (payload.data.articleBlocks) {
+    if (countImageBlocks(payload.data.articleBlocks) > MAX_ARTICLE_IMAGE_BLOCKS) {
+      return NextResponse.json(
+        { error: `一篇文章最多 ${MAX_ARTICLE_IMAGE_BLOCKS} 張內文圖片。` },
+        { status: 400 },
+      );
+    }
+    const imageAssetIds = payload.data.articleBlocks.flatMap((block) =>
+      block.type === "image" && block.data.assetId ? [block.data.assetId] : [],
+    );
+    if (imageAssetIds.length) {
+      const { data: imageAssets } = await access.supabase
+        .from("content_assets")
+        .select("id")
+        .eq("content_item_id", contentId)
+        .eq("user_id", access.user.id)
+        .eq("asset_type", "image")
+        .eq("status", "ready")
+        .in("id", imageAssetIds);
+      if ((imageAssets ?? []).length !== new Set(imageAssetIds).size) {
+        return NextResponse.json(
+          { error: "內文圖片不存在或尚未上傳完成。" },
+          { status: 400 },
+        );
+      }
+    }
+  }
+
   if (payload.data.coverAssetId) {
     const { data: asset } = await access.supabase
       .from("content_assets")
@@ -102,23 +137,35 @@ export async function PATCH(request: Request, context: RouteContext) {
       ...(publishedAt.value !== undefined
         ? { published_at: publishedAt.value }
         : {}),
+      ...(payload.data.articleBlocks
+        ? {
+            article_blocks: toStoredArticleBlocks(payload.data.articleBlocks),
+          }
+        : {}),
     })
     .eq("id", contentId)
     .eq("user_id", access.user.id)
     .select("*")
     .single();
   if (error) {
+    const missingColumn =
+      error.code === "42703" || /article_blocks/i.test(error.message);
     return NextResponse.json(
       {
-        error:
-          error.code === "23505"
+        error: missingColumn
+          ? "請先在 Supabase SQL Editor 執行 article_blocks 的 migration。"
+          : error.code === "23505"
             ? "這個網址代稱已被使用。"
             : error.message,
       },
-      { status: error.code === "23505" ? 409 : 500 },
+      {
+        status: missingColumn ? 409 : error.code === "23505" ? 409 : 500,
+      },
     );
   }
-  return NextResponse.json({ content: data });
+  return NextResponse.json({
+    content: await loadContentWithAssets(data as ContentItem),
+  });
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {
