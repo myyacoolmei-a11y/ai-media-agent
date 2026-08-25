@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { loadArticleBlocks } from "@/lib/content/blocks";
+import { hydrateBlockMedia, loadArticleBlocks } from "@/lib/content/blocks";
 import { verifyContentAccess } from "@/lib/content/access";
+import {
+  MAX_ARTICLE_IMAGES,
+  MAX_ARTICLE_VIDEOS,
+  countArticleImages,
+  countArticleVideos,
+} from "@/lib/content/limits";
 import { isMissingRelation } from "@/lib/db/missing";
 import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 import { articleBlocksSaveSchema } from "@/types/blocks";
@@ -16,7 +22,7 @@ export async function GET(_request: Request, context: RouteContext) {
   if (!access) {
     return NextResponse.json({ error: "找不到內容或沒有權限。" }, { status: 404 });
   }
-  const blocks = await loadArticleBlocks(contentId);
+  const blocks = await hydrateBlockMedia(await loadArticleBlocks(contentId));
   return NextResponse.json({ blocks });
 }
 
@@ -31,6 +37,23 @@ export async function PUT(request: Request, context: RouteContext) {
   const payload = articleBlocksSaveSchema.safeParse(await request.json());
   if (!payload.success) {
     return NextResponse.json({ error: "區塊資料不正確。" }, { status: 400 });
+  }
+
+  const countable = payload.data.blocks.map((block) => ({
+    type: block.type,
+    metadata: block.metadata,
+  }));
+  if (countArticleImages(countable) > MAX_ARTICLE_IMAGES) {
+    return NextResponse.json(
+      { error: `內文圖片（含圖集）最多 ${MAX_ARTICLE_IMAGES} 張。` },
+      { status: 400 },
+    );
+  }
+  if (countArticleVideos(countable) > MAX_ARTICLE_VIDEOS) {
+    return NextResponse.json(
+      { error: `每篇最多 ${MAX_ARTICLE_VIDEOS} 支影片。` },
+      { status: 400 },
+    );
   }
 
   const rows = payload.data.blocks.map((block, index) => ({
@@ -66,10 +89,25 @@ export async function PUT(request: Request, context: RouteContext) {
       .from("article_blocks")
       .insert(rows);
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      const dividerMissing = /divider/i.test(insertError.message);
+      if (dividerMissing) {
+        const fallback = rows.map((row) =>
+          row.type === "divider"
+            ? { ...row, type: "text" as const, metadata: { ...row.metadata, kind: "divider" } }
+            : row,
+        );
+        const { error: retryError } = await access.supabase
+          .from("article_blocks")
+          .insert(fallback);
+        if (retryError) {
+          return NextResponse.json({ error: retryError.message }, { status: 500 });
+        }
+      } else {
+        return NextResponse.json({ error: insertError.message }, { status: 500 });
+      }
     }
   }
 
-  const blocks = await loadArticleBlocks(contentId);
+  const blocks = await hydrateBlockMedia(await loadArticleBlocks(contentId));
   return NextResponse.json({ blocks });
 }

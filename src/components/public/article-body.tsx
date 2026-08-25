@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AdSlot } from "@/components/public/ad-slot";
+import { GalleryLightbox } from "@/components/public/gallery-lightbox";
 import { parseEmbed } from "@/lib/content/embed";
 import { galleryLayoutClass, hasRenderableBlocks } from "@/lib/content/blocks";
 import type { ArticleBlock } from "@/types/blocks";
@@ -22,28 +23,11 @@ function Gallery({ block }: { block: ArticleBlock }) {
   if (!items.length) return null;
   return (
     <figure>
-      <div className={galleryLayoutClass(layout)}>
-        {items.map((item, index) => (
-          <div
-            key={`${item.url}-${index}`}
-            className={layout === "carousel" ? "w-[min(100%,22rem)] shrink-0 snap-start" : ""}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item.url}
-              alt={item.alt || block.alt_text || ""}
-              loading="lazy"
-              className="h-auto w-full rounded-xl object-cover"
-            />
-            {item.caption || item.source ? (
-              <figcaption className="mt-2 text-[11px] leading-5 text-zinc-500">
-                {item.caption}
-                {item.source ? ` · ${item.source}` : ""}
-              </figcaption>
-            ) : null}
-          </div>
-        ))}
-      </div>
+      <GalleryLightbox
+        items={items}
+        className={galleryLayoutClass(layout)}
+        carousel={layout === "carousel"}
+      />
       {block.caption && layout === "single" ? (
         <figcaption className="mt-2 text-[11px] text-zinc-500">{block.caption}</figcaption>
       ) : null}
@@ -148,6 +132,9 @@ function BlockView({
   inlineAds: ServedAd[];
   videoAds: ServedAd[];
 }) {
+  if (block.type === "divider" || block.metadata?.kind === "divider") {
+    return <hr className="border-white/10" />;
+  }
   if (block.type === "heading") {
     return (
       <h2 className="font-[family-name:var(--font-news-serif)] text-2xl tracking-[-0.03em]">
@@ -178,7 +165,7 @@ function BlockView({
           src={block.media_url}
           alt={block.alt_text || story.title}
           loading="lazy"
-          className="h-auto w-full rounded-2xl object-cover"
+          className="h-auto w-full rounded-2xl"
         />
         {block.caption || block.source ? (
           <figcaption className="mt-2 text-[11px] leading-5 text-zinc-500">
@@ -202,16 +189,14 @@ function BlockView({
             className="mb-4"
           />
         ) : null}
-        <div className="aspect-video overflow-hidden rounded-2xl bg-black">
-          <video
-            src={block.media_url}
-            poster={block.thumbnail_url ?? undefined}
-            controls
-            preload="metadata"
-            playsInline
-            className="size-full"
-          />
-        </div>
+        <video
+          src={block.media_url}
+          poster={block.thumbnail_url ?? undefined}
+          controls
+          preload="metadata"
+          playsInline
+          className="h-auto w-full rounded-2xl bg-black"
+        />
         {block.caption ? (
           <figcaption className="mt-2 text-[11px] text-zinc-500">{block.caption}</figcaption>
         ) : null}

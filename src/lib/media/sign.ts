@@ -37,8 +37,8 @@ export async function signMediaAsset(
 export async function signMediaPath(
   bucket: string,
   path: string,
-  width = 1200,
+  width?: number | null,
   expiresIn = 60 * 60 * 12,
 ) {
-  return signedUrl(bucket, path, expiresIn, width);
+  return signedUrl(bucket, path, expiresIn, width ?? undefined);
 }

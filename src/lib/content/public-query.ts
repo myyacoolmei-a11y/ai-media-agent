@@ -9,17 +9,6 @@ import type {
   PublicContentItem,
 } from "@/types/content";
 
-function coverUrlFromBlock(block: ArticleBlock | undefined) {
-  if (!block) return null;
-  if (Array.isArray(block.metadata?.items)) {
-    const items = block.metadata.items as Array<{ url?: string }>;
-    const marked = items.find((item) => Boolean((item as { cover?: boolean }).cover));
-    const first = marked ?? items[0];
-    if (typeof first?.url === "string" && first.url) return first.url;
-  }
-  return block.thumbnail_url ?? block.media_url ?? null;
-}
-
 function relatedSlugs(block: ArticleBlock) {
   if (Array.isArray(block.metadata?.slugs)) {
     return (block.metadata.slugs as unknown[])
@@ -102,13 +91,6 @@ export async function serializePublicContent(
     }
   }
 
-  const firstBlockImage = blocks.find(
-    (block) =>
-      (block.type === "image" || block.type === "gallery") &&
-      (block.thumbnail_url || block.media_url || Array.isArray(block.metadata?.items)),
-  );
-  const coverBlock = blocks.find((block) => block.metadata?.cover) ?? firstBlockImage;
-
   return {
     id: content.id,
     title: content.title,
@@ -116,7 +98,7 @@ export async function serializePublicContent(
     summary: content.summary,
     content: content.content,
     videoUrl: content.video_url,
-    coverImage: cover?.signed_url ?? coverUrlFromBlock(coverBlock),
+    coverImage: cover?.signed_url ?? null,
     category: content.category,
     contentType: content.content_type,
     status: "published",

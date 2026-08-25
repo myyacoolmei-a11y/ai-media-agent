@@ -13,7 +13,8 @@ do $$ begin
     'video',
     'embed',
     'ad',
-    'related_articles'
+    'related_articles',
+    'divider'
   );
 exception
   when duplicate_object then null;

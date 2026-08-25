@@ -10,6 +10,7 @@ export const articleBlockTypeSchema = z.enum([
   "embed",
   "ad",
   "related_articles",
+  "divider",
 ]);
 
 export type ArticleBlockType = z.infer<typeof articleBlockTypeSchema>;
@@ -77,4 +78,5 @@ export const articleBlockTypeLabels: Record<ArticleBlockType, string> = {
   embed: "外部影音",
   ad: "廣告",
   related_articles: "延伸閱讀",
+  divider: "分隔線",
 };

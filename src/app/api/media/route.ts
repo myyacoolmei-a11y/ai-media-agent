@@ -3,6 +3,11 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  MAX_IMAGE_UPLOAD_BYTES,
+  MAX_VIDEO_UPLOAD_BYTES,
+  formatBytes,
+} from "@/lib/content/limits";
 import { getAuthenticatedUser } from "@/lib/jobs/access";
 import { isMissingRelation } from "@/lib/db/missing";
 import { signMediaAsset } from "@/lib/media/sign";
@@ -56,10 +61,18 @@ export async function POST(request: Request) {
   }
   const allowed =
     payload.data.type === "image"
-      ? ["image/jpeg", "image/png", "image/webp", "image/gif"]
+      ? ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"]
       : ["video/mp4", "video/quicktime", "video/webm"];
   if (!allowed.includes(payload.data.mimeType)) {
     return NextResponse.json({ error: "不支援這個檔案格式。" }, { status: 400 });
+  }
+  const maxBytes =
+    payload.data.type === "image" ? MAX_IMAGE_UPLOAD_BYTES : MAX_VIDEO_UPLOAD_BYTES;
+  if (payload.data.sizeBytes > maxBytes) {
+    return NextResponse.json(
+      { error: `檔案超過 ${formatBytes(maxBytes)}，請壓縮後再上傳。` },
+      { status: 400 },
+    );
   }
 
   const supabase = createAdminClient();

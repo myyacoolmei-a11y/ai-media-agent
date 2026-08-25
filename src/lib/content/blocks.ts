@@ -67,7 +67,13 @@ export async function loadArticleBlocks(articleId: string): Promise<ArticleBlock
       if (isMissingRelation(error)) return [];
       throw new Error(error.message);
     }
-    return (data ?? []) as ArticleBlock[];
+    return (data ?? []).map((row) => {
+      const block = row as ArticleBlock;
+      if (block.metadata?.kind === "divider") {
+        return { ...block, type: "divider" };
+      }
+      return block;
+    });
   } catch (error) {
     if (error instanceof Error && isMissingRelation(error)) return [];
     throw error;
@@ -80,11 +86,21 @@ export async function hydrateBlockMedia(blocks: ArticleBlock[]): Promise<Article
       const meta = block.metadata ?? {};
       const bucket = typeof meta.bucket === "string" ? meta.bucket : "content-media";
       const path = typeof meta.storagePath === "string" ? meta.storagePath : null;
+      const isVideo = block.type === "video";
       let mediaUrl = block.media_url;
       let thumb = block.thumbnail_url;
       if (path) {
-        mediaUrl = (await signMediaPath(bucket, path, 1400)) ?? mediaUrl;
-        thumb = (await signMediaPath(bucket, path, 640)) ?? thumb ?? mediaUrl;
+        mediaUrl =
+          (await signMediaPath(bucket, path, isVideo ? null : 1400)) ?? mediaUrl;
+        if (!isVideo) {
+          thumb = (await signMediaPath(bucket, path, 640)) ?? thumb ?? mediaUrl;
+        }
+      }
+      const posterPath = typeof meta.posterPath === "string" ? meta.posterPath : null;
+      const posterBucket =
+        typeof meta.posterBucket === "string" ? meta.posterBucket : bucket;
+      if (posterPath) {
+        thumb = (await signMediaPath(posterBucket, posterPath, 1200)) ?? thumb;
       }
       const items = Array.isArray(meta.items)
         ? await Promise.all(

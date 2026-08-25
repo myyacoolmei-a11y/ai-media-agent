@@ -3,6 +3,7 @@
 import {
   ChevronDown,
   ChevronUp,
+  GripVertical,
   ImagePlus,
   LoaderCircle,
   Trash2,
@@ -10,10 +11,23 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { MediaLibraryDialog } from "@/components/admin/media-library-dialog";
 import { Button } from "@/components/ui/button";
-import { articleBlockTypeLabels, type ArticleBlockType, type GalleryLayout } from "@/types/blocks";
+import { parseEmbed } from "@/lib/content/embed";
+import {
+  MAX_ARTICLE_IMAGES,
+  MAX_ARTICLE_VIDEOS,
+  MAX_IMAGE_UPLOAD_BYTES,
+  MAX_VIDEO_UPLOAD_BYTES,
+  countArticleImages,
+  countArticleVideos,
+  formatBytes,
+} from "@/lib/content/limits";
+import { optimizeArticleImage } from "@/lib/media/optimize-image";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import type { MediaAsset } from "@/types/media";
+import { articleBlockTypeLabels, type ArticleBlockType, type GalleryLayout } from "@/types/blocks";
 
 export type EditorBlock = {
   clientId: string;
@@ -32,27 +46,32 @@ type GalleryItem = {
   url: string;
   storagePath?: string;
   bucket?: string;
+  mediaAssetId?: string;
   caption?: string;
   alt?: string;
   source?: string;
 };
 
 type UploadTarget =
-  | { mode: "new"; asGallery?: boolean }
+  | { mode: "new"; asGallery?: boolean; afterId?: string }
   | { mode: "gallery"; clientId: string }
   | { mode: "replace"; clientId: string }
   | { mode: "poster"; clientId: string };
 
-const ADDABLE: ArticleBlockType[] = [
-  "text",
-  "heading",
-  "image",
-  "gallery",
-  "video",
-  "embed",
-  "quote",
-  "ad",
-  "related_articles",
+const PRIMARY_ADD: Array<{ type: ArticleBlockType; label: string }> = [
+  { type: "text", label: "文字" },
+  { type: "image", label: "圖片" },
+  { type: "gallery", label: "多圖" },
+  { type: "video", label: "影片" },
+  { type: "embed", label: "YouTube" },
+  { type: "quote", label: "引言" },
+];
+
+const MORE_ADD: Array<{ type: ArticleBlockType; label: string }> = [
+  { type: "heading", label: "小標題" },
+  { type: "divider", label: "分隔線" },
+  { type: "ad", label: "廣告" },
+  { type: "related_articles", label: "延伸閱讀" },
 ];
 
 export function emptyEditorBlock(type: ArticleBlockType): EditorBlock {
@@ -65,7 +84,7 @@ export function emptyEditorBlock(type: ArticleBlockType): EditorBlock {
     caption: "",
     source: "",
     altText: "",
-    metadata: type === "gallery" ? { layout: "gallery", items: [] } : {},
+    metadata: type === "gallery" ? { layout: "gallery", items: [] } : type === "divider" ? { kind: "divider" } : {},
   };
 }
 
@@ -90,25 +109,37 @@ function galleryItems(block: EditorBlock): GalleryItem[] {
     : [];
 }
 
+function insertBlocks(list: EditorBlock[], added: EditorBlock[], afterId?: string) {
+  if (!afterId) return [...list, ...added];
+  const index = list.findIndex((block) => block.clientId === afterId);
+  if (index < 0) return [...list, ...added];
+  const next = [...list];
+  next.splice(index + 1, 0, ...added);
+  return next;
+}
+
 export function BlockEditor({
   blocks,
   onChange,
   ensureArticleId,
-  onSetCover,
 }: {
   blocks: EditorBlock[];
   onChange: (blocks: EditorBlock[]) => void;
   ensureArticleId: () => Promise<string>;
-  onSetCover: (previewUrl: string) => void;
 }) {
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  const [failures, setFailures] = useState<string[]>([]);
+  const [library, setLibrary] = useState<{ kind: "image" | "video"; target: UploadTarget } | null>(null);
+  const [dragId, setDragId] = useState("");
   const imageRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
   const posterRef = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<UploadTarget>({ mode: "new" });
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
+  const imageCount = countArticleImages(blocks);
+  const videoCount = countArticleVideos(blocks);
 
   function update(clientId: string, patch: Partial<EditorBlock>) {
     onChange(
@@ -128,136 +159,255 @@ export function BlockEditor({
     onChange(copy);
   }
 
-  function add(type: ArticleBlockType) {
+  function add(type: ArticleBlockType, afterId?: string) {
     if (type === "image" || type === "gallery") {
-      uploadTarget.current = { mode: "new", asGallery: type === "gallery" };
+      uploadTarget.current = { mode: "new", asGallery: type === "gallery", afterId };
       imageRef.current?.click();
       return;
     }
     if (type === "video") {
-      uploadTarget.current = { mode: "new" };
+      uploadTarget.current = { mode: "new", afterId };
       videoRef.current?.click();
       return;
     }
-    onChange([...blocks, emptyEditorBlock(type)]);
+    onChange(insertBlocks(blocksRef.current, [emptyEditorBlock(type)], afterId));
   }
 
   async function uploadFiles(files: File[]) {
-    const images = files.filter((file) => file.type.startsWith("image/"));
-    const videos = files.filter((file) => file.type.startsWith("video/"));
+    let images = files.filter(
+      (file) => file.type.startsWith("image/") || /\.(heic|heif)$/i.test(file.name),
+    );
+    let videos = files.filter((file) => file.type.startsWith("video/"));
     if (!images.length && !videos.length) {
       setError("請選擇圖片或影片檔。");
       return;
     }
     const target = uploadTarget.current;
     setError("");
+    setFailures([]);
+    const remainingImages = MAX_ARTICLE_IMAGES - imageCount;
+    const remainingVideos = MAX_ARTICLE_VIDEOS - videoCount;
+    const nextFailures: string[] = [];
+    if (target.mode === "new" || target.mode === "gallery") {
+      if (images.length > remainingImages) {
+        for (const extra of images.slice(Math.max(remainingImages, 0))) {
+          nextFailures.push(`${extra.name}：已達 ${MAX_ARTICLE_IMAGES} 張上限，未上傳。`);
+        }
+        images = images.slice(0, Math.max(remainingImages, 0));
+      }
+    }
+    if (target.mode === "new") {
+      if (videos.length > remainingVideos) {
+        for (const extra of videos.slice(Math.max(remainingVideos, 0))) {
+          nextFailures.push(`${extra.name}：已達 ${MAX_ARTICLE_VIDEOS} 支上限，未上傳。`);
+        }
+        videos = videos.slice(0, Math.max(remainingVideos, 0));
+      }
+    }
+    if (!images.length && !videos.length) {
+      setFailures(nextFailures);
+      setError(nextFailures[0] || "沒有可上傳的檔案。");
+      return;
+    }
     try {
       await ensureArticleId();
       const total = images.length + videos.length;
       let done = 0;
+      let ok = 0;
       const uploadedImages: GalleryItem[] = [];
       for (const file of images) {
         done += 1;
-        setProgress(`上傳中 ${done}/${total} ${file.name}`);
-        const uploaded = await uploadOne(file, "image");
-        uploadedImages.push({
-          url: uploaded.url,
-          storagePath: uploaded.path,
-          bucket: "content-media",
-          caption: "",
-          alt: "",
-          source: "",
-        });
+        if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+          nextFailures.push(`${file.name}：檔案大於 ${formatBytes(MAX_IMAGE_UPLOAD_BYTES)}，未上傳。`);
+          setProgress(`上傳中 ${done}/${total} · 成功 ${ok} · 失敗 ${nextFailures.length}`);
+          continue;
+        }
+        setProgress(`壓縮並上傳 ${done}/${total} ${file.name}`);
+        try {
+          const optimized = await optimizeArticleImage(file);
+          const uploaded = await uploadOne(optimized, "image");
+          uploadedImages.push({
+            url: uploaded.url,
+            storagePath: uploaded.path,
+            bucket: "content-media",
+            mediaAssetId: uploaded.id,
+            caption: "",
+            alt: "",
+            source: "",
+          });
+          ok += 1;
+        } catch (fileError) {
+          nextFailures.push(
+            `${file.name}：${fileError instanceof Error ? fileError.message : "上傳失敗"}`,
+          );
+        }
+        setProgress(`上傳中 ${done}/${total} · 成功 ${ok} · 失敗 ${nextFailures.length}`);
       }
-      const uploadedVideos: Array<{ url: string; path: string }> = [];
+      const uploadedVideos: Array<{ url: string; path: string; id: string }> = [];
       for (const file of videos) {
         done += 1;
+        if (file.size > MAX_VIDEO_UPLOAD_BYTES) {
+          nextFailures.push(`${file.name}：影片大於 ${formatBytes(MAX_VIDEO_UPLOAD_BYTES)}，請壓縮後再上傳。`);
+          setProgress(`上傳中 ${done}/${total} · 成功 ${ok} · 失敗 ${nextFailures.length}`);
+          continue;
+        }
         setProgress(`上傳中 ${done}/${total} ${file.name}`);
-        uploadedVideos.push(await uploadOne(file, "video"));
-      }
-
-      if (target.mode === "poster" && uploadedImages[0]) {
-        update(target.clientId, { thumbnailUrl: uploadedImages[0].url });
-        return;
-      }
-      if (target.mode === "gallery") {
-        onChange(
-          blocksRef.current.map((block) =>
-            block.clientId === target.clientId
-              ? {
-                  ...block,
-                  metadata: {
-                    ...block.metadata,
-                    items: [...galleryItems(block), ...uploadedImages],
-                  },
-                }
-              : block,
-          ),
-        );
-        return;
-      }
-      if (target.mode === "replace") {
-        const current = blocksRef.current.find((block) => block.clientId === target.clientId);
-        if (current?.type === "image" && uploadedImages[0]) {
-          update(target.clientId, {
-            mediaUrl: uploadedImages[0].url,
-            thumbnailUrl: uploadedImages[0].url,
-            metadata: {
-              ...current.metadata,
-              storagePath: uploadedImages[0].storagePath,
-              bucket: "content-media",
-            },
-          });
-          return;
+        try {
+          uploadedVideos.push(await uploadOne(file, "video"));
+          ok += 1;
+        } catch (fileError) {
+          nextFailures.push(
+            `${file.name}：${fileError instanceof Error ? fileError.message : "上傳失敗"}`,
+          );
         }
-        if (current?.type === "video" && uploadedVideos[0]) {
-          update(target.clientId, {
-            mediaUrl: uploadedVideos[0].url,
-            metadata: {
-              ...current.metadata,
-              storagePath: uploadedVideos[0].path,
-              bucket: "content-media",
-            },
-          });
-          return;
-        }
+        setProgress(`上傳中 ${done}/${total} · 成功 ${ok} · 失敗 ${nextFailures.length}`);
       }
-
-      const next = [...blocksRef.current];
-      const asGallery = target.mode === "new" && Boolean(target.asGallery);
-      if (asGallery || uploadedImages.length > 1) {
-        next.push({
-          ...emptyEditorBlock("gallery"),
-          metadata: {
-            layout: asGallery ? "gallery" : uploadedImages.length > 2 ? "three" : "two",
-            items: uploadedImages,
-          },
-        });
-      } else if (uploadedImages[0]) {
-        next.push({
-          ...emptyEditorBlock("image"),
-          mediaUrl: uploadedImages[0].url,
-          thumbnailUrl: uploadedImages[0].url,
-          metadata: {
-            storagePath: uploadedImages[0].storagePath,
-            bucket: "content-media",
-          },
-        });
-      }
-      for (const uploaded of uploadedVideos) {
-        next.push({
-          ...emptyEditorBlock("video"),
-          mediaUrl: uploaded.url,
-          metadata: { storagePath: uploaded.path, bucket: "content-media" },
-        });
-      }
-      onChange(next);
+      setFailures(nextFailures);
+      applyUploads(target, uploadedImages, uploadedVideos);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "上傳失敗。");
     } finally {
       setProgress("");
       uploadTarget.current = { mode: "new" };
     }
+  }
+
+  function applyUploads(
+    target: UploadTarget,
+    uploadedImages: GalleryItem[],
+    uploadedVideos: Array<{ url: string; path: string; id: string }>,
+  ) {
+    if (target.mode === "poster" && uploadedImages[0]) {
+      const current = blocksRef.current.find((block) => block.clientId === target.clientId);
+      update(target.clientId, {
+        thumbnailUrl: uploadedImages[0].url,
+        metadata: {
+          ...current?.metadata,
+          posterPath: uploadedImages[0].storagePath,
+          posterBucket: "content-media",
+          posterAssetId: uploadedImages[0].mediaAssetId,
+        },
+      });
+      return;
+    }
+    if (target.mode === "gallery") {
+      onChange(
+        blocksRef.current.map((block) =>
+          block.clientId === target.clientId
+            ? {
+                ...block,
+                metadata: {
+                  ...block.metadata,
+                  items: [...galleryItems(block), ...uploadedImages],
+                },
+              }
+            : block,
+        ),
+      );
+      return;
+    }
+    if (target.mode === "replace") {
+      const current = blocksRef.current.find((block) => block.clientId === target.clientId);
+      if (current?.type === "image" && uploadedImages[0]) {
+        update(target.clientId, {
+          mediaUrl: uploadedImages[0].url,
+          thumbnailUrl: uploadedImages[0].url,
+          metadata: {
+            ...current.metadata,
+            storagePath: uploadedImages[0].storagePath,
+            bucket: "content-media",
+            mediaAssetId: uploadedImages[0].mediaAssetId,
+          },
+        });
+        return;
+      }
+      if (current?.type === "video" && uploadedVideos[0]) {
+        update(target.clientId, {
+          mediaUrl: uploadedVideos[0].url,
+          metadata: {
+            ...current.metadata,
+            storagePath: uploadedVideos[0].path,
+            bucket: "content-media",
+            mediaAssetId: uploadedVideos[0].id,
+          },
+        });
+        return;
+      }
+    }
+
+    const added: EditorBlock[] = [];
+    const asGallery = target.mode === "new" && Boolean(target.asGallery);
+    if (asGallery && uploadedImages.length) {
+      added.push({
+        ...emptyEditorBlock("gallery"),
+        metadata: { layout: "gallery", items: uploadedImages },
+      });
+    } else {
+      for (const item of uploadedImages) {
+        added.push({
+          ...emptyEditorBlock("image"),
+          mediaUrl: item.url,
+          thumbnailUrl: item.url,
+          metadata: {
+            storagePath: item.storagePath,
+            bucket: "content-media",
+            mediaAssetId: item.mediaAssetId,
+          },
+        });
+      }
+    }
+    for (const uploaded of uploadedVideos) {
+      added.push({
+        ...emptyEditorBlock("video"),
+        mediaUrl: uploaded.url,
+        metadata: { storagePath: uploaded.path, bucket: "content-media", mediaAssetId: uploaded.id },
+      });
+    }
+    if (added.length) {
+      onChange(insertBlocks(blocksRef.current, added, target.mode === "new" ? target.afterId : undefined));
+    }
+  }
+
+  function applyLibrary(assets: MediaAsset[]) {
+    const target = library?.target ?? uploadTarget.current;
+    const remainingImages =
+      MAX_ARTICLE_IMAGES - countArticleImages(blocksRef.current);
+    const remainingVideos =
+      MAX_ARTICLE_VIDEOS - countArticleVideos(blocksRef.current);
+    const images: GalleryItem[] = assets
+      .filter((asset) => asset.type === "image")
+      .map((asset) => ({
+        url: asset.signed_url || asset.signed_thumb_url || "",
+        storagePath: asset.storage_path,
+        bucket: asset.bucket,
+        mediaAssetId: asset.id,
+        caption: asset.caption,
+        alt: asset.alt_text,
+        source: asset.source,
+      }));
+    const videos = assets
+      .filter((asset) => asset.type === "video")
+      .map((asset) => ({
+        url: asset.signed_url || "",
+        path: asset.storage_path,
+        id: asset.id,
+      }));
+    const limitedImages =
+      target.mode === "replace" || target.mode === "poster"
+        ? images.slice(0, 1)
+        : images.slice(0, Math.max(remainingImages, 0));
+    const limitedVideos =
+      target.mode === "replace"
+        ? videos.slice(0, 1)
+        : target.mode === "new"
+          ? videos.slice(0, Math.max(remainingVideos, 0))
+          : [];
+    if (images.length > limitedImages.length || videos.length > limitedVideos.length) {
+      setError(
+        `已套用可加入的素材；內文圖片最多 ${MAX_ARTICLE_IMAGES} 張、影片最多 ${MAX_ARTICLE_VIDEOS} 支。`,
+      );
+    }
+    applyUploads(target, limitedImages, limitedVideos);
   }
 
   async function uploadOne(file: File, type: "image" | "video") {
@@ -289,13 +439,14 @@ export function BlockEditor({
       method: "POST",
     });
     const body = (await complete.json()) as {
-      asset?: { signed_url?: string; signed_thumb_url?: string; storage_path: string };
+      asset?: { id?: string; signed_url?: string; signed_thumb_url?: string; storage_path: string };
       error?: string;
     };
     if (!complete.ok || !body.asset) {
       throw new Error(body.error || "上傳驗證失敗。");
     }
     return {
+      id: body.asset.id || prepared.asset.id,
       url: body.asset.signed_url || URL.createObjectURL(file),
       path: body.asset.storage_path,
     };
@@ -306,26 +457,53 @@ export function BlockEditor({
       <div>
         <p className="text-xs text-zinc-400">文章內容</p>
         <p className="mt-1 text-[11px] text-zinc-600">
-          封面下方的正文可任意插入文字、多張圖片、圖集、影片與廣告，並上下調整順序。
+          圖片 {imageCount}/{MAX_ARTICLE_IMAGES} · 影片 {videoCount}/{MAX_ARTICLE_VIDEOS}
+          。封面獨立設定，不會把內文圖混進去。
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {ADDABLE.map((type) => (
+          {PRIMARY_ADD.map((item) => (
             <button
-              key={type}
+              key={item.type}
               type="button"
               className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-200 hover:border-[#d3b176]/40 hover:text-white"
-              onClick={() => add(type)}
+              onClick={() => add(item.type)}
             >
-              ＋ {articleBlockTypeLabels[type]}
+              ＋ {item.label}
             </button>
           ))}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {MORE_ADD.map((item) => (
+            <button
+              key={item.type}
+              type="button"
+              className="rounded-full px-3 py-1.5 text-[11px] text-zinc-500 hover:text-white"
+              onClick={() => add(item.type)}
+            >
+              ＋ {item.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="rounded-full px-3 py-1.5 text-[11px] text-zinc-500 hover:text-white"
+            onClick={() => setLibrary({ kind: "image", target: { mode: "new" } })}
+          >
+            從媒體庫選圖
+          </button>
+          <button
+            type="button"
+            className="rounded-full px-3 py-1.5 text-[11px] text-zinc-500 hover:text-white"
+            onClick={() => setLibrary({ kind: "video", target: { mode: "new" } })}
+          >
+            從媒體庫選影片
+          </button>
         </div>
       </div>
 
       <input
         ref={imageRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
         multiple
         className="sr-only"
         onChange={(event) => {
@@ -337,7 +515,7 @@ export function BlockEditor({
       <input
         ref={videoRef}
         type="file"
-        accept="video/mp4,video/quicktime,video/webm"
+        accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
         multiple
         className="sr-only"
         onChange={(event) => {
@@ -365,6 +543,13 @@ export function BlockEditor({
           {progress}
         </p>
       ) : null}
+      {failures.length ? (
+        <ul className="mt-3 space-y-1 text-[11px] text-rose-300">
+          {failures.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
 
       <div
         className="mt-5 rounded-2xl border border-dashed border-white/10 p-4 text-center text-xs text-zinc-600"
@@ -372,21 +557,54 @@ export function BlockEditor({
         onDrop={(event) => {
           event.preventDefault();
           const files = [...event.dataTransfer.files];
-          const imageCount = files.filter((file) => file.type.startsWith("image/")).length;
-          uploadTarget.current = { mode: "new", asGallery: imageCount > 1 };
+          const imageCountDrop = files.filter((file) => file.type.startsWith("image/")).length;
+          uploadTarget.current = { mode: "new", asGallery: imageCountDrop > 1 };
           if (files.length) void uploadFiles(files);
         }}
       >
-        把圖片或影片拖到這裡，或用「新增區塊」。可一次選多張。
+        把圖片或影片拖到這裡。一次可選多張；其中一張失敗不會讓其他張一起失敗。影片上限 {formatBytes(MAX_VIDEO_UPLOAD_BYTES)}。
       </div>
 
       <div className="mt-5 space-y-3">
         {blocks.length ? (
           blocks.map((block, index) => (
-            <article key={block.clientId} className="rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4">
+            <article
+              key={block.clientId}
+              className={cn(
+                "rounded-2xl border border-white/[0.07] bg-black/20 p-3 sm:p-4",
+                dragId === block.clientId && "opacity-50",
+              )}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const fromId = event.dataTransfer.getData("text/block-id");
+                if (!fromId || fromId === block.clientId) return;
+                const from = blocks.findIndex((item) => item.clientId === fromId);
+                const to = blocks.findIndex((item) => item.clientId === block.clientId);
+                if (from < 0 || to < 0) return;
+                const copy = [...blocks];
+                const [item] = copy.splice(from, 1);
+                copy.splice(to, 0, item);
+                onChange(copy);
+                setDragId("");
+              }}
+            >
               <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData("text/block-id", block.clientId);
+                    setDragId(block.clientId);
+                  }}
+                  onDragEnd={() => setDragId("")}
+                  className="cursor-grab rounded-full p-1 hover:bg-white/10"
+                  aria-label="拖曳排序"
+                >
+                  <GripVertical className="size-4" />
+                </button>
                 <span className="rounded-full bg-white/[0.04] px-2 py-1">
-                  {articleBlockTypeLabels[block.type]}
+                  {block.type === "embed" ? "YouTube" : block.type === "gallery" ? "多圖" : articleBlockTypeLabels[block.type]}
                 </span>
                 <span className="ml-auto" />
                 <button type="button" onClick={() => move(block.clientId, -1)} disabled={index === 0} className="rounded-full p-1 hover:bg-white/10 disabled:opacity-30">
@@ -402,7 +620,6 @@ export function BlockEditor({
               <BlockFields
                 block={block}
                 onChange={(patch) => update(block.clientId, patch)}
-                onSetCover={onSetCover}
                 onPickImages={() => {
                   uploadTarget.current =
                     block.type === "gallery"
@@ -418,13 +635,40 @@ export function BlockEditor({
                   uploadTarget.current = { mode: "poster", clientId: block.clientId };
                   posterRef.current?.click();
                 }}
+                onLibrary={() =>
+                  setLibrary({
+                    kind: block.type === "video" ? "video" : "image",
+                    target:
+                      block.type === "gallery"
+                        ? { mode: "gallery", clientId: block.clientId }
+                        : { mode: "replace", clientId: block.clientId },
+                  })
+                }
               />
+              <div className="mt-3 flex flex-wrap gap-2">
+                {PRIMARY_ADD.map((item) => (
+                  <button
+                    key={`${block.clientId}-${item.type}`}
+                    type="button"
+                    className="text-[10px] text-zinc-600 hover:text-[#d3b176]"
+                    onClick={() => add(item.type, block.clientId)}
+                  >
+                    在下方插入{item.label}
+                  </button>
+                ))}
+              </div>
             </article>
           ))
         ) : (
-          <p className="py-6 text-center text-sm text-zinc-600">還沒有內容區塊。</p>
+          <p className="py-6 text-center text-sm text-zinc-600">還沒有內容區塊。請用上方按鈕加入文字或圖片。</p>
         )}
       </div>
+      <MediaLibraryDialog
+        open={Boolean(library)}
+        kind={library?.kind ?? "image"}
+        onClose={() => setLibrary(null)}
+        onPick={applyLibrary}
+      />
     </section>
   );
 }
@@ -432,18 +676,21 @@ export function BlockEditor({
 function BlockFields({
   block,
   onChange,
-  onSetCover,
   onPickImages,
   onPickVideo,
   onPickPoster,
+  onLibrary,
 }: {
   block: EditorBlock;
   onChange: (patch: Partial<EditorBlock>) => void;
-  onSetCover: (previewUrl: string) => void;
   onPickImages: () => void;
   onPickVideo: () => void;
   onPickPoster: () => void;
+  onLibrary: () => void;
 }) {
+  if (block.type === "divider") {
+    return <hr className="mt-4 border-white/10" />;
+  }
   if (block.type === "text" || block.type === "heading" || block.type === "quote") {
     return (
       <textarea
@@ -456,18 +703,35 @@ function BlockFields({
     );
   }
   if (block.type === "embed") {
+    const url = String(block.metadata.url ?? block.mediaUrl ?? "");
+    const parsed = parseEmbed(url);
     return (
-      <input
-        value={String(block.metadata.url ?? block.mediaUrl ?? "")}
-        onChange={(event) =>
-          onChange({
-            mediaUrl: event.target.value,
-            metadata: { ...block.metadata, url: event.target.value },
-          })
-        }
-        placeholder="YouTube / TikTok / Instagram / Threads 網址"
-        className="editor-input mt-3 font-mono text-xs"
-      />
+      <div className="mt-3 space-y-3">
+        <input
+          value={url}
+          onChange={(event) =>
+            onChange({
+              mediaUrl: event.target.value,
+              metadata: { ...block.metadata, url: event.target.value },
+            })
+          }
+          placeholder="貼上 YouTube 或 YouTube Shorts 網址"
+          className="editor-input font-mono text-xs"
+        />
+        {parsed?.kind === "iframe" && parsed.embedUrl ? (
+          <div className="aspect-video overflow-hidden rounded-xl bg-black">
+            <iframe
+              src={parsed.embedUrl}
+              title={block.caption || parsed.provider}
+              className="size-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        ) : url.trim() ? (
+          <p className="text-[11px] text-zinc-500">請貼入有效的 YouTube 網址。</p>
+        ) : null}
+      </div>
     );
   }
   if (block.type === "related_articles") {
@@ -503,7 +767,8 @@ function BlockFields({
             poster={block.thumbnailUrl ?? undefined}
             controls
             preload="metadata"
-            className="aspect-video w-full rounded-xl bg-black"
+            playsInline
+            className="h-auto w-full rounded-xl bg-black"
           />
         ) : (
           <button type="button" onClick={onPickVideo} className="grid aspect-video w-full place-items-center rounded-xl border border-dashed border-white/10 text-zinc-600">
@@ -511,11 +776,17 @@ function BlockFields({
           </button>
         )}
         <CaptionFields block={block} onChange={onChange} />
-        {block.mediaUrl ? (
-          <button type="button" className="text-xs text-[#d3b176]" onClick={onPickPoster}>
-            {block.thumbnailUrl ? "更換影片封面" : "設定影片封面 poster"}
+        <div className="flex flex-wrap gap-3 text-xs text-[#d3b176]">
+          <button type="button" onClick={onPickVideo}>
+            更換影片
           </button>
-        ) : null}
+          <button type="button" onClick={onPickPoster}>
+            {block.thumbnailUrl ? "更換 poster" : "設定 poster 封面"}
+          </button>
+          <button type="button" onClick={onLibrary}>
+            從媒體庫選擇
+          </button>
+        </div>
       </div>
     );
   }
@@ -524,18 +795,26 @@ function BlockFields({
       <div className="mt-3 space-y-3">
         {block.mediaUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={block.mediaUrl} alt={block.altText} className="h-auto w-full rounded-xl object-cover" />
+          <img src={block.mediaUrl} alt={block.altText} className="h-auto w-full rounded-xl" />
         ) : (
           <button type="button" onClick={onPickImages} className="grid aspect-video w-full place-items-center rounded-xl border border-dashed border-white/10 text-zinc-600">
             <ImagePlus className="size-5" />
           </button>
         )}
         <CaptionFields block={block} onChange={onChange} />
-        {block.mediaUrl ? (
-          <button type="button" className="text-xs text-[#d3b176]" onClick={() => onSetCover(block.mediaUrl!)}>
-            設為封面
+        <div className="flex flex-wrap gap-3 text-xs text-[#d3b176]">
+          <button type="button" onClick={onPickImages}>
+            更換圖片
           </button>
-        ) : null}
+          {block.mediaUrl ? (
+            <a href={block.mediaUrl} target="_blank" rel="noreferrer">
+              預覽
+            </a>
+          ) : null}
+          <button type="button" onClick={onLibrary}>
+            從媒體庫選擇
+          </button>
+        </div>
       </div>
     );
   }
@@ -558,7 +837,29 @@ function BlockFields({
       </select>
       <div className={cn("grid gap-2", layout === "three" ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
         {items.map((item, index) => (
-          <div key={`${item.url}-${index}`} className="rounded-xl border border-white/[0.06] p-2">
+          <div
+            key={`${item.url}-${index}`}
+            className="rounded-xl border border-white/[0.06] p-2"
+            draggable
+            onDragStart={(event) => {
+              event.stopPropagation();
+              event.dataTransfer.setData("text/gallery-index", String(index));
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const from = Number(event.dataTransfer.getData("text/gallery-index"));
+              if (Number.isNaN(from) || from === index) return;
+              const next = [...items];
+              const [moved] = next.splice(from, 1);
+              next.splice(index, 0, moved);
+              onChange({ metadata: { ...block.metadata, items: next } });
+            }}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={item.url} alt={item.alt || ""} className="h-28 w-full rounded-lg object-cover" />
             <input
@@ -572,16 +873,6 @@ function BlockFields({
               className="mt-1 w-full bg-transparent text-[11px] outline-none"
             />
             <input
-              value={item.source ?? ""}
-              onChange={(event) => {
-                const next = [...items];
-                next[index] = { ...item, source: event.target.value };
-                onChange({ metadata: { ...block.metadata, items: next } });
-              }}
-              placeholder="來源"
-              className="mt-1 w-full bg-transparent text-[11px] outline-none"
-            />
-            <input
               value={item.alt ?? ""}
               onChange={(event) => {
                 const next = [...items];
@@ -591,47 +882,23 @@ function BlockFields({
               placeholder="ALT"
               className="mt-1 w-full bg-transparent text-[11px] outline-none"
             />
-            <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+            <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-zinc-500">
+              <span>可拖曳排序</span>
+              {item.url ? (
+                <a href={item.url} target="_blank" rel="noreferrer" className="text-[#d3b176]">
+                  預覽
+                </a>
+              ) : null}
               <button
                 type="button"
-                className="text-[#d3b176]"
-                onClick={() => onSetCover(item.url)}
-              >
-                設為封面
-              </button>
-              <button
-                type="button"
-                disabled={index === 0}
-                className="disabled:opacity-30"
-                onClick={() => {
-                  const next = [...items];
-                  const [moved] = next.splice(index, 1);
-                  next.splice(index - 1, 0, moved);
-                  onChange({ metadata: { ...block.metadata, items: next } });
-                }}
-              >
-                左移
-              </button>
-              <button
-                type="button"
-                disabled={index === items.length - 1}
-                className="disabled:opacity-30"
-                onClick={() => {
-                  const next = [...items];
-                  const [moved] = next.splice(index, 1);
-                  next.splice(index + 1, 0, moved);
-                  onChange({ metadata: { ...block.metadata, items: next } });
-                }}
-              >
-                右移
-              </button>
-              <button
-                type="button"
-                className="text-zinc-500"
-                onClick={() => {
-                  const next = items.filter((_, itemIndex) => itemIndex !== index);
-                  onChange({ metadata: { ...block.metadata, items: next } });
-                }}
+                onClick={() =>
+                  onChange({
+                    metadata: {
+                      ...block.metadata,
+                      items: items.filter((_, itemIndex) => itemIndex !== index),
+                    },
+                  })
+                }
               >
                 刪除
               </button>
@@ -639,10 +906,15 @@ function BlockFields({
           </div>
         ))}
       </div>
-      <Button type="button" size="sm" variant="secondary" onClick={onPickImages}>
-        <ImagePlus className="size-3.5" />
-        再加圖片
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="secondary" onClick={onPickImages}>
+          <ImagePlus className="size-3.5" />
+          再加圖片
+        </Button>
+        <Button type="button" size="sm" variant="secondary" onClick={onLibrary}>
+          從媒體庫選擇
+        </Button>
+      </div>
     </div>
   );
 }
@@ -659,7 +931,7 @@ function CaptionFields({
       <input
         value={block.caption}
         onChange={(event) => onChange({ caption: event.target.value })}
-        placeholder="圖片說明"
+        placeholder="圖片說明 Caption"
         className="h-9 rounded-lg border border-white/10 bg-black/20 px-3 text-xs"
       />
       <input
@@ -671,7 +943,7 @@ function CaptionFields({
       <input
         value={block.altText}
         onChange={(event) => onChange({ altText: event.target.value })}
-        placeholder="ALT"
+        placeholder="ALT Text"
         className="h-9 rounded-lg border border-white/10 bg-black/20 px-3 text-xs"
       />
     </div>

@@ -24,6 +24,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const story = await getPublishedStory(slug);
   if (!story) return { title: "找不到報導" };
+  const cover = story.coverImage ? [{ url: story.coverImage }] : undefined;
   return {
     title: story.title,
     description: story.summary || undefined,
@@ -33,11 +34,13 @@ export async function generateMetadata({
       siteName: SITE_NAME,
       locale: "zh_TW",
       type: "article",
+      images: cover,
     },
     twitter: {
       card: "summary_large_image",
       title: story.title,
       description: story.summary || SITE_DESCRIPTION,
+      images: story.coverImage ? [story.coverImage] : undefined,
     },
   };
 }
@@ -64,7 +67,6 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     getAdsForPlacement("sponsor", 4),
   ]);
   const hasBlocks = hasRenderableBlocks(story.blocks);
-  const showLegacyCover = !hasBlocks && Boolean(story.coverImage);
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,52rem)_18rem] lg:items-start lg:justify-center lg:gap-12">
@@ -94,12 +96,12 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           <AdSlot ads={topAds} placementKey="article_top" articleId={story.id} />
         </div>
 
-        {showLegacyCover ? (
+        {story.coverImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={story.coverImage ?? ""}
+            src={story.coverImage}
             alt={story.title}
-            className="mt-10 h-auto w-full rounded-2xl object-cover"
+            className="mt-10 h-auto w-full rounded-2xl"
           />
         ) : null}
 

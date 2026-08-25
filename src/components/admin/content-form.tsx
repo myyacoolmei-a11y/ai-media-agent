@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   Check,
+  Eye,
   ImagePlus,
   LoaderCircle,
   Save,
@@ -38,6 +39,13 @@ import { createClient } from "@/lib/supabase/client";
 import type { ContentItem, ContentType } from "@/types/content";
 import { contentTypeLabels } from "@/types/content";
 import { blocksToPlainText } from "@/lib/content/blocks";
+import {
+  MAX_ARTICLE_IMAGES,
+  MAX_ARTICLE_VIDEOS,
+  countArticleImages,
+  countArticleVideos,
+} from "@/lib/content/limits";
+import { optimizeArticleImage } from "@/lib/media/optimize-image";
 import type { ArticleBlock } from "@/types/blocks";
 
 type FormState = {
@@ -138,7 +146,7 @@ function editorBlocksFromContent(content?: ContentItem): EditorBlock[] {
   return source.map((block) => ({
     clientId: block.id,
     id: block.id.startsWith("legacy-") ? undefined : block.id,
-    type: block.type,
+    type: block.metadata?.kind === "divider" ? "divider" : block.type,
     content: block.content,
     mediaUrl: block.media_url,
     thumbnailUrl: block.thumbnail_url,
@@ -328,6 +336,22 @@ export function ContentForm({
       if (nextStatus === "published" && (!next.summary.trim() || (!next.content.trim() && !blocks.some((block) => block.content.trim() || block.mediaUrl || (Array.isArray(block.metadata.items) && block.metadata.items.length))))) {
         throw new Error("發布前必須完成摘要與內文。");
       }
+      if (countArticleImages(blocks) > MAX_ARTICLE_IMAGES) {
+        throw new Error(`內文圖片（含圖集）最多 ${MAX_ARTICLE_IMAGES} 張。`);
+      }
+      if (countArticleVideos(blocks) > MAX_ARTICLE_VIDEOS) {
+        throw new Error(`每篇最多 ${MAX_ARTICLE_VIDEOS} 支影片。`);
+      }
+      const firstEmbed = blocks.find(
+        (block) =>
+          block.type === "embed" &&
+          String(block.metadata.url ?? block.mediaUrl ?? "").trim(),
+      );
+      if (firstEmbed) {
+        next.video_url = normalizeVideoUrl(
+          String(firstEmbed.metadata.url ?? firstEmbed.mediaUrl ?? ""),
+        );
+      }
 
       if (!next.id) {
         const created = await createDraft(next);
@@ -381,9 +405,28 @@ export function ContentForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ blocks: toSavePayload(blocks) }),
         });
-        const blockBody = (await blockResponse.json()) as { error?: string };
-        if (!blockResponse.ok && blockResponse.status !== 409) {
+        const blockBody = (await blockResponse.json()) as {
+          error?: string;
+          blocks?: ArticleBlock[];
+        };
+        if (!blockResponse.ok) {
           throw new Error(blockBody.error || "內容區塊儲存失敗。");
+        }
+        if (blockBody.blocks) {
+          setBlocks(
+            blockBody.blocks.map((block) => ({
+              clientId: block.id,
+              id: block.id,
+              type: block.metadata?.kind === "divider" ? "divider" : block.type,
+              content: block.content,
+              mediaUrl: block.media_url,
+              thumbnailUrl: block.thumbnail_url,
+              caption: block.caption,
+              source: block.source,
+              altText: block.alt_text,
+              metadata: block.metadata ?? {},
+            })),
+          );
         }
       }
 
@@ -422,15 +465,20 @@ export function ContentForm({
     }
   }
 
-  function chooseCover(file?: File) {
+  async function chooseCover(file?: File) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) {
       setError("封面必須是圖片檔案。");
       return;
     }
-    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
+    try {
+      const optimized = await optimizeArticleImage(file);
+      if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+      setCoverFile(optimized);
+      setCoverPreview(URL.createObjectURL(optimized));
+    } catch (coverError) {
+      setError(coverError instanceof Error ? coverError.message : "封面圖片無法處理。");
+    }
   }
 
   const preview = coverPreview || article.cover_image;
@@ -496,6 +544,15 @@ export function ContentForm({
               發布
             </Button>
           )}
+          {article.id ? (
+            <Link
+              href={`/admin/content/${article.id}/preview`}
+              className="inline-flex h-9 items-center gap-1 rounded-full border border-white/10 px-3 text-xs text-zinc-400 hover:text-white"
+            >
+              <Eye className="size-3.5" />
+              預覽
+            </Link>
+          ) : null}
         </div>
       </div>
 
@@ -518,9 +575,9 @@ export function ContentForm({
           />
         </label>
         <label className="block">
-          <span className="mb-2 block text-xs text-zinc-400">摘要</span>
+          <span className="mb-2 block text-xs text-zinc-400">副標題</span>
           <textarea
-            rows={4}
+            rows={3}
             value={article.summary}
             onChange={(event) =>
               setArticle((current) => ({
@@ -529,94 +586,77 @@ export function ContentForm({
               }))
             }
             className="editor-input resize-y leading-7"
-            placeholder="前台列表與首頁會顯示這段摘要"
+            placeholder="副標題／摘要，會出現在列表、SEO 與分享卡片"
           />
         </label>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
-            <p className="text-xs text-zinc-400">封面圖片</p>
-            {preview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={preview}
-                alt={article.title}
-                className="mt-4 aspect-video w-full rounded-2xl object-cover"
-              />
-            ) : (
-              <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed border-white/10 text-zinc-700">
-                <ImagePlus className="size-5" />
-              </div>
-            )}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              className="sr-only"
-              onChange={(event) => chooseCover(event.target.files?.[0])}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="mt-3 w-full"
-              disabled={busy === "cover"}
-              onClick={() => fileRef.current?.click()}
-            >
-              <ImagePlus className="size-3.5" />
-              {preview ? "更換封面" : "上傳封面"}
-            </Button>
-          </section>
-
-          <div className="space-y-5">
-            <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
-              <span className="text-xs text-zinc-400">影片網址</span>
-              <p className="mt-1 text-[11px] leading-5 text-zinc-600">
-                可填 YouTube、Vimeo 或直接影片檔網址。填了就會出現在影音報導。
-              </p>
-              <input
-                type="url"
-                value={article.video_url}
-                onChange={(event) =>
-                  setArticle((current) => ({
-                    ...current,
-                    video_url: event.target.value,
-                  }))
-                }
-                placeholder="https://..."
-                className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
-              />
-            </label>
-            <CategoryFields
-              value={article.category}
-              onChange={(category) =>
-                setArticle((current) => ({ ...current, category }))
+          <CategoryFields
+            value={article.category}
+            onChange={(category) =>
+              setArticle((current) => ({ ...current, category }))
+            }
+          />
+          <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+            <span className="text-xs text-zinc-400">內容類型</span>
+            <select
+              value={article.content_type}
+              onChange={(event) =>
+                setArticle((current) => ({
+                  ...current,
+                  content_type: event.target.value as ContentType,
+                }))
               }
-            />
-            <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
-              <span className="text-xs text-zinc-400">內容類型</span>
-              <select
-                value={article.content_type}
-                onChange={(event) =>
-                  setArticle((current) => ({
-                    ...current,
-                    content_type: event.target.value as ContentType,
-                  }))
-                }
-                className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
-              >
-                <option value="article">一般報導</option>
-                <option value="video">影音報導</option>
-                {article.content_type !== "article" &&
-                article.content_type !== "video" ? (
-                  <option value={article.content_type}>
-                    {contentTypeLabels[article.content_type]}
-                  </option>
-                ) : null}
-              </select>
-            </label>
-          </div>
+              className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+            >
+              <option value="article">一般報導</option>
+              <option value="video">影音報導</option>
+              {article.content_type !== "article" &&
+              article.content_type !== "video" ? (
+                <option value={article.content_type}>
+                  {contentTypeLabels[article.content_type]}
+                </option>
+              ) : null}
+            </select>
+          </label>
         </div>
+
+        <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <p className="text-xs text-zinc-400">封面圖片（僅 1 張）</p>
+          <p className="mt-1 text-[11px] text-zinc-600">
+            用於首頁卡片、分類列表、SEO 與 Facebook／LINE 分享。內文圖片請在下方文章內容插入。
+          </p>
+          {preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview}
+              alt={article.title}
+              className="mt-4 aspect-video w-full rounded-2xl object-cover"
+            />
+          ) : (
+            <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed border-white/10 text-zinc-700">
+              <ImagePlus className="size-5" />
+            </div>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
+            className="sr-only"
+            onChange={(event) => void chooseCover(event.target.files?.[0])}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            disabled={busy === "cover"}
+            onClick={() => fileRef.current?.click()}
+          >
+            <ImagePlus className="size-3.5" />
+            {preview ? "更換封面" : "上傳封面"}
+          </Button>
+        </section>
 
         <BlockEditor
           blocks={blocks}
@@ -632,30 +672,26 @@ export function ContentForm({
             router.replace(`/admin/content/${created.id}/edit`);
             return created.id;
           }}
-          onSetCover={(url) => {
-            setCoverFile(null);
-            setCoverPreview(url);
-            setArticle((current) => ({
-              ...current,
-              cover_image: url,
-              cover_asset_id: null,
-            }));
-            setBlocks((current) =>
-              current.map((block) => ({
-                ...block,
-                metadata: {
-                  ...block.metadata,
-                  cover:
-                    block.mediaUrl === url ||
-                    (Array.isArray(block.metadata.items) &&
-                      (block.metadata.items as Array<{ url?: string }>).some(
-                        (item) => item.url === url,
-                      )),
-                },
-              })),
-            );
-          }}
         />
+
+        <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <span className="text-xs text-zinc-400">影音列表網址（選填）</span>
+          <p className="mt-1 text-[11px] leading-5 text-zinc-600">
+            舊文章的 YouTube 仍可用。若內文已有 YouTube block，儲存時會自動帶入。
+          </p>
+          <input
+            type="url"
+            value={article.video_url}
+            onChange={(event) =>
+              setArticle((current) => ({
+                ...current,
+                video_url: event.target.value,
+              }))
+            }
+            placeholder="https://www.youtube.com/watch?v=..."
+            className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+          />
+        </label>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
