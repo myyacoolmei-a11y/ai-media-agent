@@ -30,10 +30,22 @@ export async function POST(_request: Request, context: RouteContext) {
 
   const folder = path.posix.dirname(asset.storage_path);
   const fileName = path.posix.basename(asset.storage_path);
-  const { data: objects, error: storageError } = await access.supabase.storage
+  const { data: signed, error: signedError } = await access.supabase.storage
+    .from(asset.bucket)
+    .createSignedUrl(asset.storage_path, 60);
+  const listed = await access.supabase.storage
     .from(asset.bucket)
     .list(folder, { search: fileName, limit: 1 });
-  if (storageError || !objects?.some((object) => object.name === fileName)) {
+  const exists =
+    Boolean(signed?.signedUrl) ||
+    Boolean(listed.data?.some((object) => object.name === fileName));
+  if (signedError) {
+    console.error("asset complete signed url failed", signedError);
+  }
+  if (listed.error) {
+    console.error("asset complete list failed", listed.error);
+  }
+  if (!exists) {
     await access.supabase
       .from("content_assets")
       .update({ status: "failed" })

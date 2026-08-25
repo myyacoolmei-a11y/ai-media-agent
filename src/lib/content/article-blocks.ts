@@ -19,6 +19,7 @@ const imageBlockSchema = z.object({
     url: z.string().max(4000).optional().default(""),
     caption: z.string().max(500).optional().default(""),
     assetId: z.string().uuid().nullable().optional(),
+    storagePath: z.string().max(500).nullable().optional(),
   }),
 });
 
@@ -49,7 +50,7 @@ export function emptyImageBlock(): ArticleImageBlock {
   return {
     id: newBlockId(),
     type: "image",
-    data: { url: "", caption: "", assetId: null },
+    data: { url: "", caption: "", assetId: null, storagePath: null },
   };
 }
 
@@ -121,10 +122,16 @@ function normalizeBlock(input: unknown): ArticleBlock | null {
         : typeof data.asset_id === "string"
           ? data.asset_id
           : null;
+    const storagePath =
+      typeof data.storagePath === "string"
+        ? data.storagePath
+        : typeof data.storage_path === "string"
+          ? data.storage_path
+          : null;
     const parsedImage = imageBlockSchema.safeParse({
       id,
       type: "image",
-      data: { url, caption, assetId },
+      data: { url, caption, assetId, storagePath },
     });
     return parsedImage.success ? parsedImage.data : null;
   }
@@ -154,6 +161,7 @@ export function toStoredArticleBlocks(blocks: ArticleBlock[]): ArticleBlock[] {
         url: "",
         caption: block.data.caption ?? "",
         assetId: block.data.assetId ?? null,
+        storagePath: block.data.storagePath ?? null,
       },
     };
   });
@@ -174,11 +182,19 @@ export function hydrateArticleBlocks(
   return blocks.map((block) => {
     if (block.type !== "image") return block;
     const asset = block.data.assetId ? byId.get(block.data.assetId) : null;
+    const signed = asset?.signed_url || "";
+    const storedUrl = block.data.url || "";
+    const usableUrl =
+      signed ||
+      (storedUrl.startsWith("http://") || storedUrl.startsWith("https://")
+        ? storedUrl
+        : "");
     return {
       ...block,
       data: {
         ...block.data,
-        url: asset?.signed_url || block.data.url || "",
+        storagePath: asset?.storage_path || block.data.storagePath || null,
+        url: usableUrl,
       },
     };
   });

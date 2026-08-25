@@ -395,6 +395,7 @@ export function getPreviewDemoContentItems(): ContentItem[] {
                 url: block.data.url,
                 caption: block.data.caption,
                 assetId: null,
+                storagePath: null,
               },
             },
     ),
