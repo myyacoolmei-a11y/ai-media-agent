@@ -1,0 +1,22 @@
+export type MediaAsset = {
+  id: string;
+  user_id: string | null;
+  type: "image" | "video";
+  bucket: string;
+  storage_path: string;
+  url: string | null;
+  thumbnail_url: string | null;
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+  alt_text: string;
+  caption: string;
+  source: string;
+  status: string;
+  created_at: string;
+  signed_url?: string;
+  signed_thumb_url?: string;
+};

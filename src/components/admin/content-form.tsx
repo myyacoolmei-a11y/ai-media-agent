@@ -3,6 +3,7 @@
 import {
   ArrowLeft,
   Check,
+  Eye,
   ImagePlus,
   LoaderCircle,
   Save,
@@ -12,6 +13,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { SocialSyncPanel } from "@/components/admin/social-sync-panel";
+import {
+  BlockEditor,
+  toSavePayload,
+  type EditorBlock,
+} from "@/components/admin/block-editor";
 import { Button } from "@/components/ui/button";
 import {
   DEFAULT_CATEGORY,
@@ -24,9 +31,23 @@ import {
 import { toDatetimeLocalValue } from "@/lib/content/dates";
 import { createContentSlug, normalizeSlug } from "@/lib/content/slug";
 import { normalizeVideoUrl } from "@/lib/content/video";
+import {
+  clearAssistantHandoffDraft,
+  readAssistantHandoffDraft,
+} from "@/lib/social/assistant-draft";
 import { createClient } from "@/lib/supabase/client";
 import type { ContentItem, ContentType } from "@/types/content";
 import { contentTypeLabels } from "@/types/content";
+import { blocksToPlainText } from "@/lib/content/blocks";
+import {
+  MAX_ARTICLE_IMAGES,
+  MAX_ARTICLE_VIDEOS,
+  blockHasPublishableBody,
+  countArticleImages,
+  countArticleVideos,
+} from "@/lib/content/limits";
+import { optimizeArticleImage } from "@/lib/media/optimize-image";
+import type { ArticleBlock } from "@/types/blocks";
 
 type FormState = {
   id?: string;
@@ -41,6 +62,8 @@ type FormState = {
   cover_asset_id: string | null;
   cover_image: string | null;
   published_at: string | null;
+  sponsored: boolean;
+  sponsor_label: string;
 };
 
 function emptyForm(): FormState {
@@ -56,6 +79,8 @@ function emptyForm(): FormState {
     cover_asset_id: null,
     cover_image: null,
     published_at: null,
+    sponsored: false,
+    sponsor_label: "",
   };
 }
 
@@ -73,7 +98,64 @@ function fromContent(content: ContentItem): FormState {
     cover_asset_id: content.cover_asset_id,
     cover_image: content.cover_image ?? null,
     published_at: content.published_at,
+    sponsored: Boolean(content.sponsored),
+    sponsor_label: content.sponsor_label ?? "",
   };
+}
+
+function editorBlocksFromContent(content?: ContentItem): EditorBlock[] {
+  const source = content?.blocks?.length
+    ? content.blocks
+    : content
+      ? ([
+          content.content?.trim()
+            ? {
+                id: `legacy-text-${content.id}`,
+                article_id: content.id,
+                type: "text" as const,
+                sort_order: 0,
+                content: content.content,
+                media_url: null,
+                thumbnail_url: null,
+                caption: "",
+                source: "",
+                alt_text: "",
+                metadata: {},
+                created_at: content.updated_at,
+                updated_at: content.updated_at,
+              }
+            : null,
+          content.video_url
+            ? {
+                id: `legacy-embed-${content.id}`,
+                article_id: content.id,
+                type: "embed" as const,
+                sort_order: 1,
+                content: "",
+                media_url: content.video_url,
+                thumbnail_url: null,
+                caption: "",
+                source: "",
+                alt_text: "",
+                metadata: { url: content.video_url },
+                created_at: content.updated_at,
+                updated_at: content.updated_at,
+              }
+            : null,
+        ].filter(Boolean) as ArticleBlock[])
+      : [];
+  return source.map((block) => ({
+    clientId: block.id,
+    id: block.id.startsWith("legacy-") ? undefined : block.id,
+    type: block.metadata?.kind === "divider" ? "divider" : block.type,
+    content: block.content,
+    mediaUrl: block.media_url,
+    thumbnailUrl: block.thumbnail_url,
+    caption: block.caption,
+    source: block.source,
+    altText: block.alt_text,
+    metadata: block.metadata ?? {},
+  }));
 }
 
 export function ContentForm({
@@ -93,6 +175,30 @@ export function ContentForm({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [seoKeywords, setSeoKeywords] = useState("");
+  const [hashtagsText, setHashtagsText] = useState("");
+  const [blocks, setBlocks] = useState<EditorBlock[]>(() =>
+    editorBlocksFromContent(initialContent),
+  );
+
+  useEffect(() => {
+    const draft = readAssistantHandoffDraft();
+    if (!draft) return;
+    const apply = () => {
+      setArticle((current) => ({
+        ...current,
+        title: current.title || draft.title,
+        summary: current.summary || draft.summary,
+        content: current.content || draft.content,
+        video_url: current.video_url || draft.videoUrl || "",
+      }));
+      setHashtagsText((current) => current || draft.hashtags.join(" "));
+      setSeoKeywords((current) => current || draft.seoKeywords);
+      clearAssistantHandoffDraft();
+    };
+    const timer = window.setTimeout(apply, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -112,6 +218,8 @@ export function ContentForm({
       styleProfileId: null,
       coverAssetId: next.cover_asset_id,
       publishedAt: next.published_at ?? "",
+      sponsored: next.sponsored,
+      sponsorLabel: next.sponsor_label,
     };
   }
 
@@ -214,7 +322,7 @@ export function ContentForm({
     return body.content;
   }
 
-  async function persist(nextStatus?: "draft" | "published") {
+  async function persist(nextStatus?: "draft" | "published"): Promise<string | null> {
     setBusy(nextStatus === "published" ? "publish" : "save");
     setError("");
     try {
@@ -226,8 +334,28 @@ export function ContentForm({
       if (!next.title.trim()) {
         throw new Error("請先填寫標題。");
       }
-      if (nextStatus === "published" && (!next.summary.trim() || !next.content.trim())) {
+      if (
+        nextStatus === "published" &&
+        (!next.summary.trim() ||
+          (!next.content.trim() && !blocks.some((block) => blockHasPublishableBody(block))))
+      ) {
         throw new Error("發布前必須完成摘要與內文。");
+      }
+      if (countArticleImages(blocks) > MAX_ARTICLE_IMAGES) {
+        throw new Error(`內文圖片（含圖集）最多 ${MAX_ARTICLE_IMAGES} 張。`);
+      }
+      if (countArticleVideos(blocks) > MAX_ARTICLE_VIDEOS) {
+        throw new Error(`每篇最多 ${MAX_ARTICLE_VIDEOS} 支影片。`);
+      }
+      const firstEmbed = blocks.find(
+        (block) =>
+          block.type === "embed" &&
+          String(block.metadata.url ?? block.mediaUrl ?? "").trim(),
+      );
+      if (firstEmbed) {
+        next.video_url = normalizeVideoUrl(
+          String(firstEmbed.metadata.url ?? firstEmbed.mediaUrl ?? ""),
+        );
       }
 
       if (!next.id) {
@@ -254,8 +382,58 @@ export function ContentForm({
         setCoverPreview(withCover.cover_image ?? null);
       }
 
-      const savedContent = await saveFields(next);
+      const savedContent = await saveFields({
+        ...next,
+        content: blocksToPlainText(
+          blocks.map((block, index) => ({
+            id: block.id ?? block.clientId,
+            article_id: next.id ?? "",
+            type: block.type,
+            sort_order: index,
+            content: block.content,
+            media_url: block.mediaUrl,
+            thumbnail_url: block.thumbnailUrl,
+            caption: block.caption,
+            source: block.source,
+            alt_text: block.altText,
+            metadata: block.metadata,
+            created_at: "",
+            updated_at: "",
+          })),
+        ) || next.content,
+      });
       next = { ...next, ...fromContent(savedContent) };
+
+      if (next.id) {
+        const blockResponse = await fetch(`/api/contents/${next.id}/blocks`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blocks: toSavePayload(blocks) }),
+        });
+        const blockBody = (await blockResponse.json()) as {
+          error?: string;
+          blocks?: ArticleBlock[];
+        };
+        if (!blockResponse.ok) {
+          throw new Error(blockBody.error || "內容區塊儲存失敗。");
+        }
+        if (blockBody.blocks) {
+          setBlocks(
+            blockBody.blocks.map((block) => ({
+              clientId: block.id,
+              id: block.id,
+              type: block.metadata?.kind === "divider" ? "divider" : block.type,
+              content: block.content,
+              mediaUrl: block.media_url,
+              thumbnailUrl: block.thumbnail_url,
+              caption: block.caption,
+              source: block.source,
+              altText: block.alt_text,
+              metadata: block.metadata ?? {},
+            })),
+          );
+        }
+      }
 
       if (nextStatus === "published" && next.id) {
         const published = await setStatus(next.id, "published");
@@ -266,13 +444,21 @@ export function ContentForm({
       setSaved(true);
       window.setTimeout(() => setSaved(false), 1200);
       router.refresh();
+      return next.id ?? null;
     } catch (persistError) {
       setError(
         persistError instanceof Error ? persistError.message : "儲存失敗。",
       );
+      return null;
     } finally {
       setBusy("");
     }
+  }
+
+  async function handlePreview() {
+    const id = await persist("draft");
+    if (!id) return;
+    router.push(`/admin/content/${id}/preview`);
   }
 
   async function unpublish() {
@@ -292,15 +478,20 @@ export function ContentForm({
     }
   }
 
-  function chooseCover(file?: File) {
+  async function chooseCover(file?: File) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) {
       setError("封面必須是圖片檔案。");
       return;
     }
-    if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
+    try {
+      const optimized = await optimizeArticleImage(file);
+      if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+      setCoverFile(optimized);
+      setCoverPreview(URL.createObjectURL(optimized));
+    } catch (coverError) {
+      setError(coverError instanceof Error ? coverError.message : "封面圖片無法處理。");
+    }
   }
 
   const preview = coverPreview || article.cover_image;
@@ -366,6 +557,19 @@ export function ContentForm({
               發布
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={Boolean(busy)}
+            onClick={() => void handlePreview()}
+          >
+            {busy === "save" ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <Eye className="size-3.5" />
+            )}
+            預覽
+          </Button>
         </div>
       </div>
 
@@ -388,9 +592,9 @@ export function ContentForm({
           />
         </label>
         <label className="block">
-          <span className="mb-2 block text-xs text-zinc-400">摘要</span>
+          <span className="mb-2 block text-xs text-zinc-400">副標題</span>
           <textarea
-            rows={4}
+            rows={3}
             value={article.summary}
             onChange={(event) =>
               setArticle((current) => ({
@@ -399,109 +603,112 @@ export function ContentForm({
               }))
             }
             className="editor-input resize-y leading-7"
-            placeholder="前台列表與首頁會顯示這段摘要"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-2 block text-xs text-zinc-400">內文</span>
-          <textarea
-            rows={16}
-            value={article.content}
-            onChange={(event) =>
-              setArticle((current) => ({
-                ...current,
-                content: event.target.value,
-              }))
-            }
-            className="editor-input min-h-80 resize-y leading-8"
-            placeholder="完整報導內文"
+            placeholder="副標題／摘要，會出現在列表、SEO 與分享卡片"
           />
         </label>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
-            <p className="text-xs text-zinc-400">封面圖片</p>
-            {preview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={preview}
-                alt={article.title}
-                className="mt-4 aspect-video w-full rounded-2xl object-cover"
-              />
-            ) : (
-              <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed border-white/10 text-zinc-700">
-                <ImagePlus className="size-5" />
-              </div>
-            )}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              className="sr-only"
-              onChange={(event) => chooseCover(event.target.files?.[0])}
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="mt-3 w-full"
-              disabled={busy === "cover"}
-              onClick={() => fileRef.current?.click()}
-            >
-              <ImagePlus className="size-3.5" />
-              {preview ? "更換封面" : "上傳封面"}
-            </Button>
-          </section>
-
-          <div className="space-y-5">
-            <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
-              <span className="text-xs text-zinc-400">影片網址</span>
-              <p className="mt-1 text-[11px] leading-5 text-zinc-600">
-                可填 YouTube、Vimeo 或直接影片檔網址。填了就會出現在影音報導。
-              </p>
-              <input
-                type="url"
-                value={article.video_url}
-                onChange={(event) =>
-                  setArticle((current) => ({
-                    ...current,
-                    video_url: event.target.value,
-                  }))
-                }
-                placeholder="https://..."
-                className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
-              />
-            </label>
-            <CategoryFields
-              value={article.category}
-              onChange={(category) =>
-                setArticle((current) => ({ ...current, category }))
+          <CategoryFields
+            value={article.category}
+            onChange={(category) =>
+              setArticle((current) => ({ ...current, category }))
+            }
+          />
+          <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+            <span className="text-xs text-zinc-400">內容類型</span>
+            <select
+              value={article.content_type}
+              onChange={(event) =>
+                setArticle((current) => ({
+                  ...current,
+                  content_type: event.target.value as ContentType,
+                }))
               }
-            />
-            <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
-              <span className="text-xs text-zinc-400">內容類型</span>
-              <select
-                value={article.content_type}
-                onChange={(event) =>
-                  setArticle((current) => ({
-                    ...current,
-                    content_type: event.target.value as ContentType,
-                  }))
-                }
-                className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
-              >
-                <option value="article">一般報導</option>
-                <option value="video">影音報導</option>
-                {article.content_type !== "article" &&
-                article.content_type !== "video" ? (
-                  <option value={article.content_type}>
-                    {contentTypeLabels[article.content_type]}
-                  </option>
-                ) : null}
-              </select>
-            </label>
-          </div>
+              className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+            >
+              <option value="article">一般報導</option>
+              <option value="video">影音報導</option>
+              {article.content_type !== "article" &&
+              article.content_type !== "video" ? (
+                <option value={article.content_type}>
+                  {contentTypeLabels[article.content_type]}
+                </option>
+              ) : null}
+            </select>
+          </label>
         </div>
+
+        <section className="rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <p className="text-xs text-zinc-400">封面圖片（僅 1 張）</p>
+          <p className="mt-1 text-[11px] text-zinc-600">
+            用於首頁卡片、分類列表、SEO 與 Facebook／LINE 分享。內文圖片請在下方文章內容插入。
+          </p>
+          {preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview}
+              alt={article.title}
+              className="mt-4 aspect-video w-full rounded-2xl object-cover"
+            />
+          ) : (
+            <div className="mt-4 grid aspect-video place-items-center rounded-2xl border border-dashed border-white/10 text-zinc-700">
+              <ImagePlus className="size-5" />
+            </div>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
+            className="sr-only"
+            onChange={(event) => void chooseCover(event.target.files?.[0])}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            disabled={busy === "cover"}
+            onClick={() => fileRef.current?.click()}
+          >
+            <ImagePlus className="size-3.5" />
+            {preview ? "更換封面" : "上傳封面"}
+          </Button>
+        </section>
+
+        <BlockEditor
+          blocks={blocks}
+          onChange={setBlocks}
+          ensureArticleId={async () => {
+            if (article.id) return article.id;
+            const created = await createDraft({
+              ...article,
+              slug: article.slug || createContentSlug(article.title || "draft"),
+            });
+            const next = { ...article, ...fromContent(created), id: created.id };
+            setArticle(next);
+            router.replace(`/admin/content/${created.id}/edit`);
+            return created.id;
+          }}
+        />
+
+        <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <span className="text-xs text-zinc-400">影音列表網址（選填）</span>
+          <p className="mt-1 text-[11px] leading-5 text-zinc-600">
+            舊文章的 YouTube 仍可用。若內文已有 YouTube block，儲存時會自動帶入。
+          </p>
+          <input
+            type="url"
+            value={article.video_url}
+            onChange={(event) =>
+              setArticle((current) => ({
+                ...current,
+                video_url: event.target.value,
+              }))
+            }
+            placeholder="https://www.youtube.com/watch?v=..."
+            className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+          />
+        </label>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
@@ -545,6 +752,70 @@ export function ContentForm({
             className="editor-input font-mono text-xs"
           />
         </label>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+            <span className="text-xs text-zinc-400">SEO 關鍵字</span>
+            <input
+              value={seoKeywords}
+              onChange={(event) => setSeoKeywords(event.target.value)}
+              placeholder="用逗號或空白分隔"
+              className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+            />
+            <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+              不會直接出現在公開首頁，會作為社群文案改寫參考。
+            </p>
+          </label>
+          <label className="block rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+            <span className="text-xs text-zinc-400">Hashtag</span>
+            <input
+              value={hashtagsText}
+              onChange={(event) => setHashtagsText(event.target.value)}
+              placeholder="#地方 #人物"
+              className="mt-4 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-[#deb5bb]/40"
+            />
+          </label>
+        </div>
+
+        <label className="flex items-start gap-3 rounded-3xl border border-white/[0.08] bg-white/[0.02] p-5">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={article.sponsored}
+            onChange={(event) =>
+              setArticle((current) => ({
+                ...current,
+                sponsored: event.target.checked,
+              }))
+            }
+          />
+          <span>
+            <span className="block text-xs text-zinc-400">品牌合作／贊助文章</span>
+            <input
+              value={article.sponsor_label}
+              onChange={(event) =>
+                setArticle((current) => ({
+                  ...current,
+                  sponsor_label: event.target.value,
+                }))
+              }
+              placeholder="本篇內容由 XXX 合作呈現"
+              className="mt-3 h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs outline-none"
+            />
+            <p className="mt-2 text-[11px] leading-5 text-zinc-600">
+              勾選後會在標題附近清楚標示，不會看起來像一般新聞。
+            </p>
+          </span>
+        </label>
+
+        <SocialSyncPanel
+          article={article}
+          seoKeywords={seoKeywords}
+          hashtags={hashtagsText
+            .split(/[\s,，]+/)
+            .map((tag) => tag.trim())
+            .filter(Boolean)}
+        />
       </div>
     </div>
   );

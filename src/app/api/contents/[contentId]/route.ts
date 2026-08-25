@@ -99,6 +99,15 @@ export async function PATCH(request: Request, context: RouteContext) {
       content_type: payload.data.contentType,
       style_profile_id: payload.data.styleProfileId,
       cover_asset_id: payload.data.coverAssetId,
+      ...(payload.data.sponsored !== undefined
+        ? { sponsored: payload.data.sponsored }
+        : {}),
+      ...(payload.data.sponsorId !== undefined
+        ? { sponsor_id: payload.data.sponsorId }
+        : {}),
+      ...(payload.data.sponsorLabel !== undefined
+        ? { sponsor_label: payload.data.sponsorLabel }
+        : {}),
       ...(publishedAt.value !== undefined
         ? { published_at: publishedAt.value }
         : {}),

@@ -91,6 +91,15 @@ export async function POST(request: Request) {
       style_profile_id: payload.data.styleProfileId,
       status: "draft",
       published_at: publishedAt.value ?? null,
+      ...(payload.data.sponsored !== undefined
+        ? { sponsored: payload.data.sponsored }
+        : {}),
+      ...(payload.data.sponsorId !== undefined
+        ? { sponsor_id: payload.data.sponsorId }
+        : {}),
+      ...(payload.data.sponsorLabel !== undefined
+        ? { sponsor_label: payload.data.sponsorLabel }
+        : {}),
     })
     .select("*")
     .single();

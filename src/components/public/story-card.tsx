@@ -11,10 +11,12 @@ function Cover({
   story,
   className,
   showPlay = false,
+  eager = false,
 }: {
   story: PublicContentItem;
   className?: string;
   showPlay?: boolean;
+  eager?: boolean;
 }) {
   const video = isVideoStory(story);
   return (
@@ -24,6 +26,7 @@ function Cover({
         <img
           src={story.coverImage}
           alt={story.title}
+          loading={eager ? "eager" : "lazy"}
           className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
         />
       ) : (
@@ -64,6 +67,7 @@ export function StoryCard({
       <Link href={href} className="group block">
         <Cover
           story={story}
+          eager
           className="aspect-[16/10] w-full sm:aspect-[16/8] lg:aspect-[16/7.2]"
         />
         <div className="mt-5 sm:mt-6">

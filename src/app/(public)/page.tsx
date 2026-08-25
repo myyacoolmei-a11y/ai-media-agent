@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AdSlot } from "@/components/public/ad-slot";
 import {
   EmptyStories,
   SectionHeading,
@@ -12,6 +13,7 @@ import {
   matchesTopic,
 } from "@/lib/content/categories";
 import { listPublishedStories } from "@/lib/content/published";
+import { getAdsForPlacement } from "@/lib/ads/serve";
 import { isVideoStory } from "@/lib/content/video";
 import type { PublicContentItem } from "@/types/content";
 
@@ -51,7 +53,12 @@ function CategoryRows({
 }
 
 export default async function HomePage() {
-  const stories = await listPublishedStories({ limit: 48 });
+  const [stories, heroAds, feedAds, sponsorAds] = await Promise.all([
+    listPublishedStories({ limit: 48 }),
+    getAdsForPlacement("homepage_hero"),
+    getAdsForPlacement("homepage_feed"),
+    getAdsForPlacement("sponsor", 4),
+  ]);
   const local = getSectionBySlug("local");
   const people = getSectionBySlug("people");
   const clubTopic = local?.topics.find((topic) => topic.slug === "clubs");
@@ -63,7 +70,7 @@ export default async function HomePage() {
   const rest = stories.filter((story) => story.slug !== featured?.slug);
   const ranking = rest.slice(0, 5);
   const localStories = take(localFocusStories(rest), 4);
-  const latest = take(rest, 6, (story) => !isVideoStory(story));
+  const latest = take(rest, 16, (story) => !isVideoStory(story));
   const peopleStories = take(rest, 3, (story) =>
     people ? matchesSection(story.category, people.label) : false,
   );
@@ -82,6 +89,9 @@ export default async function HomePage() {
 
   return (
     <div className="pb-6 sm:pb-10">
+      <div className="mb-8">
+        <AdSlot ads={heroAds} placementKey="homepage_hero" variant="banner" />
+      </div>
       {featured ? (
         <section className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_19.5rem] lg:gap-12 lg:border-b lg:border-white/[0.08] lg:pb-12">
           <div>
@@ -150,9 +160,21 @@ export default async function HomePage() {
         <SectionHeading kicker="Latest" title="最新報導" href="/news" />
         {latest.length ? (
           <div className="mt-8 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-            {latest.map((story) => (
-              <StoryCard key={story.slug} story={story} />
-            ))}
+            {latest.flatMap((story, index) => {
+              const card = <StoryCard key={story.slug} story={story} />;
+              if (
+                feedAds.length &&
+                ((index + 1) % 8 === 0 || (index === latest.length - 1 && latest.length < 8))
+              ) {
+                return [
+                  card,
+                  <div key={`ad-${story.slug}`} className="sm:col-span-2 lg:col-span-3">
+                    <AdSlot ads={feedAds} placementKey="homepage_feed" variant="feed" />
+                  </div>,
+                ];
+              }
+              return [card];
+            })}
           </div>
         ) : featured ? (
           <p className="mt-6 text-sm text-zinc-600">更多報導發布後會顯示在這裡。</p>
@@ -221,6 +243,10 @@ export default async function HomePage() {
             發布含影片網址或影音類型的報導後，會顯示在這個區塊。
           </p>
         )}
+      </section>
+
+      <section className="mt-16 sm:mt-20">
+        <AdSlot ads={sponsorAds} placementKey="sponsor" variant="sponsor" />
       </section>
 
       <p className="mt-16 text-center text-xs text-zinc-600 sm:mt-20">

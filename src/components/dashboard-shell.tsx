@@ -2,7 +2,9 @@ import {
   FilePlus2,
   Files,
   Home,
+  Megaphone,
   Palette,
+  Share2,
   Sparkles,
   Video,
 } from "lucide-react";
@@ -16,6 +18,8 @@ const navigation = [
   { href: "/admin/content", label: "內容管理", icon: Files },
   { href: "/admin/content/new", label: "新增報導", icon: FilePlus2 },
   { href: "/admin/assistant", label: "AI 報導助手", icon: Sparkles },
+  { href: "/admin/social", label: "社群發布", icon: Share2 },
+  { href: "/admin/ads", label: "廣告管理", icon: Megaphone },
   { href: "/admin/assistant/new", label: "開始製作", icon: Video },
   { href: "/styles", label: "品牌風格", icon: Palette },
 ];

@@ -31,6 +31,9 @@ export const contentInputSchema = z.object({
   contentType: contentTypeSchema,
   styleProfileId: z.string().uuid().nullable(),
   publishedAt: z.string().optional(),
+  sponsored: z.boolean().optional(),
+  sponsorId: z.string().uuid().nullable().optional(),
+  sponsorLabel: z.string().trim().max(80).optional(),
 });
 
 export const contentAssetRequestSchema = z.object({
@@ -79,11 +82,16 @@ export type ContentItem = {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  sponsored?: boolean;
+  sponsor_id?: string | null;
+  sponsor_label?: string;
   assets?: ContentAsset[];
   cover_image?: string | null;
+  blocks?: import("@/types/blocks").ArticleBlock[];
 };
 
 export type PublicContentItem = {
+  id?: string;
   title: string;
   slug: string;
   summary: string;
@@ -94,6 +102,10 @@ export type PublicContentItem = {
   contentType: ContentType;
   status: "published";
   publishedAt: string;
+  sponsored?: boolean;
+  sponsorLabel?: string | null;
+  sponsorName?: string | null;
+  blocks?: import("@/types/blocks").ArticleBlock[];
   media: Array<{
     type: "image" | "video" | "audio";
     url: string;

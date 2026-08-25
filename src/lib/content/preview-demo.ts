@@ -1,7 +1,28 @@
 import { storyMatchesTaxonomy } from "@/lib/content/categories";
+import type { ArticleBlock } from "@/types/blocks";
 import type { ContentItem, PublicContentItem } from "@/types/content";
 
 const now = "2026-08-17T02:00:00.000Z";
+
+function demoBlock(
+  articleId: string,
+  partial: Pick<ArticleBlock, "id" | "type"> & Partial<ArticleBlock>,
+): ArticleBlock {
+  return {
+    article_id: articleId,
+    sort_order: 0,
+    content: "",
+    media_url: null,
+    thumbnail_url: null,
+    caption: "",
+    source: "",
+    alt_text: "",
+    metadata: {},
+    created_at: now,
+    updated_at: now,
+    ...partial,
+  };
+}
 
 function story(
   item: Omit<PublicContentItem, "status" | "media"> & {
@@ -30,6 +51,76 @@ export const previewDemoStories: Array<PublicContentItem & { id: string }> = [
     category: "地方/城市焦點",
     contentType: "article",
     publishedAt: "2026-08-17T01:30:00.000Z",
+    blocks: [
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-h",
+        type: "heading",
+        sort_order: 0,
+        content: "夜間照明先到位，再談週末市集",
+      }),
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-t1",
+        type: "text",
+        sort_order: 1,
+        content:
+          "台中舊鐵道沿線的綠空廊道延伸段今天公布開放時程。平日晚間七點到十點改為慢行優先，機車改走平行巷道，並在三處市場出入口增設行人燈號。",
+      }),
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-img",
+        type: "image",
+        sort_order: 2,
+        media_url: "/demo/cover-local-taichung.jpg",
+        alt_text: "綠空廊道夜間照明示意",
+        caption: "沿線先完成連續路燈，讓廊道在天黑後仍走得進去。",
+      }),
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-t2",
+        type: "text",
+        sort_order: 3,
+        content:
+          "交通單位表示，這不是再畫一條自行車道，而是把既有通勤、買菜與夜間活動疊在同一條廊道上。",
+      }),
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-gallery",
+        type: "gallery",
+        sort_order: 4,
+        caption: "沿線市場、社區與轉乘點",
+        metadata: {
+          layout: "gallery",
+          items: [
+            { url: "/demo/cover-local-changhua.jpg", caption: "市場出入口", alt: "市場出入口" },
+            { url: "/demo/cover-society.jpg", caption: "社區節點", alt: "社區節點" },
+            { url: "/demo/cover-focus.jpg", caption: "廊道主線", alt: "廊道主線" },
+          ],
+        },
+      }),
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-quote",
+        type: "quote",
+        sort_order: 5,
+        content: "目標是讓這段走廊在天黑後仍走得進去，而不是只在週末拍照。",
+      }),
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-yt",
+        type: "embed",
+        sort_order: 6,
+        media_url: "https://www.youtube.com/watch?v=YE7VzlLtp-4",
+        metadata: { url: "https://www.youtube.com/watch?v=YE7VzlLtp-4" },
+        caption: "現場動線說明",
+      }),
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-div",
+        type: "divider",
+        sort_order: 7,
+        metadata: { kind: "divider" },
+      }),
+      demoBlock("preview-focus-1", {
+        id: "preview-focus-1-t3",
+        type: "text",
+        sort_order: 8,
+        content: "後續三個月會依人流調整班距與臨停格。",
+      }),
+    ],
   }),
   story({
     id: "preview-local-taichung",
@@ -354,6 +445,7 @@ export function getPreviewDemoContentItems(): ContentItem[] {
     created_at: now,
     updated_at: item.publishedAt,
     cover_image: item.coverImage,
+    blocks: item.blocks,
   }));
 }
 
