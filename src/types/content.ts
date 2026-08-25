@@ -1,4 +1,3 @@
-import type { ArticleBlock, PublicArticleBlock } from "@/lib/content/article-blocks";
 import { z } from "zod";
 
 export const contentTypeSchema = z.enum([
@@ -82,7 +81,6 @@ export type ContentItem = {
   updated_at: string;
   assets?: ContentAsset[];
   cover_image?: string | null;
-  article_blocks?: ArticleBlock[];
 };
 
 export type PublicContentItem = {
@@ -101,7 +99,6 @@ export type PublicContentItem = {
     url: string;
     alt: string;
   }>;
-  articleBlocks?: PublicArticleBlock[];
 };
 
 export const contentTypeLabels: Record<ContentType, string> = {
