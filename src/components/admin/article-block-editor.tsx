@@ -27,6 +27,7 @@ export function ArticleBlockEditor({
   disabled,
   uploadingId,
   onError,
+  statusText,
 }: {
   blocks: ArticleBlock[];
   onChange: (blocks: ArticleBlock[]) => void;
@@ -34,6 +35,7 @@ export function ArticleBlockEditor({
   disabled?: boolean;
   uploadingId?: string;
   onError?: (message: string) => void;
+  statusText?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const targetId = useRef("");
@@ -140,7 +142,7 @@ export function ArticleBlockEditor({
               />
             ) : (
               <div className="mt-3 space-y-3">
-                {block.data.url ? (
+                {block.data.url && !block.data.url.startsWith("blob:") && !block.data.url.startsWith("data:") ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={block.data.url}
@@ -155,7 +157,9 @@ export function ArticleBlockEditor({
                     className="grid aspect-video w-full place-items-center rounded-2xl border border-dashed border-white/10 text-zinc-600"
                   >
                     {uploadingId === block.id ? (
-                      <LoaderCircle className="size-5 animate-spin" />
+                      <span className="text-xs text-zinc-400">
+                        {statusText || "圖片處理中"}
+                      </span>
                     ) : (
                       <ImagePlus className="size-5" />
                     )}
@@ -185,7 +189,11 @@ export function ArticleBlockEditor({
                   ) : (
                     <ImagePlus className="size-3.5" />
                   )}
-                  {block.data.url ? "更換圖片" : "上傳圖片"}
+                  {uploadingId === block.id
+                    ? statusText || "圖片處理中"
+                    : block.data.url
+                      ? "更換圖片"
+                      : "上傳圖片"}
                 </Button>
               </div>
             )}
@@ -196,13 +204,21 @@ export function ArticleBlockEditor({
       <input
         ref={fileRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
         className="sr-only"
         onChange={(event) => {
           const file = event.target.files?.[0];
           const blockId = targetId.current;
           event.target.value = "";
-          if (file && blockId) void onUploadImage(blockId, file);
+          if (!file) {
+            onError?.("圖片處理失敗，請重新選擇圖片");
+            return;
+          }
+          if (!blockId) {
+            onError?.("圖片上傳失敗：找不到對應的圖片區塊。");
+            return;
+          }
+          void onUploadImage(blockId, file);
         }}
       />
 

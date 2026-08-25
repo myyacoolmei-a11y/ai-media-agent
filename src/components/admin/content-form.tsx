@@ -34,9 +34,10 @@ import {
 } from "@/lib/content/categories";
 import { toDatetimeLocalValue } from "@/lib/content/dates";
 import { createContentSlug, normalizeSlug } from "@/lib/content/slug";
+import { optimizeArticleImage, isLikelyImageFile } from "@/lib/media/optimize-image";
+import { mapMediaError } from "@/lib/media/upload-errors";
 import { normalizeVideoUrl } from "@/lib/content/video";
-import { createClient } from "@/lib/supabase/client";
-import type { ContentItem, ContentType } from "@/types/content";
+import type { ContentAsset, ContentItem, ContentType } from "@/types/content";
 import { contentTypeLabels } from "@/types/content";
 
 type FormState = {
@@ -105,6 +106,7 @@ export function ContentForm({
     hydrateArticleBlocksFromContent(initialContent ?? { content: "" }),
   );
   const [uploadingBlockId, setUploadingBlockId] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -172,46 +174,42 @@ export function ContentForm({
   }
 
   async function uploadImageAsset(contentId: string, file: File) {
-    const prepareResponse = await fetch(`/api/contents/${contentId}/assets`, {
+    let processed: File;
+    try {
+      processed = await optimizeArticleImage(file);
+    } catch (error) {
+      console.error("article image optimize failed", error);
+      throw new Error(mapMediaError(error, "圖片處理失敗，請重新選擇圖片"));
+    }
+
+    const form = new FormData();
+    form.set("file", processed, processed.name);
+    const response = await fetch(`/api/contents/${contentId}/assets/upload`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fileName: file.name,
-        mimeType: file.type,
-        sizeBytes: file.size,
-        assetType: "image",
-      }),
+      body: form,
     });
-    const prepared = (await prepareResponse.json()) as {
-      asset?: { id: string };
-      upload?: { path: string; token: string };
+    const payload = (await response.json()) as {
+      asset?: Pick<ContentAsset, "id" | "storage_path"> & {
+        signed_url?: string;
+      };
       error?: string;
     };
-    if (!prepareResponse.ok || !prepared.asset || !prepared.upload) {
-      throw new Error(prepared.error || "無法準備圖片上傳。");
+    if (!response.ok || !payload.asset?.id || !payload.asset.signed_url) {
+      console.error("article image upload failed", payload);
+      throw new Error(
+        mapMediaError(
+          payload.error || `HTTP ${response.status}`,
+          "圖片上傳失敗。",
+        ),
+      );
     }
-    const { error: uploadError } = await createClient()
-      .storage.from("content-media")
-      .uploadToSignedUrl(prepared.upload.path, prepared.upload.token, file, {
-        contentType: file.type,
-      });
-    if (uploadError) throw uploadError;
-    const complete = await fetch(
-      `/api/contents/${contentId}/assets/${prepared.asset.id}/complete`,
-      { method: "POST" },
-    );
-    if (!complete.ok) throw new Error("圖片驗證失敗。");
-    const refreshed = await fetch(`/api/contents/${contentId}`, {
-      cache: "no-store",
-    });
-    const data = (await refreshed.json()) as { content?: ContentItem };
-    const uploadedAsset = data.content?.assets?.find(
-      (asset) => asset.id === prepared.asset?.id,
-    );
-    if (!data.content || !uploadedAsset) {
-      throw new Error("無法讀取已上傳圖片。");
+    if (
+      payload.asset.signed_url.startsWith("blob:") ||
+      payload.asset.signed_url.startsWith("data:")
+    ) {
+      throw new Error("圖片上傳失敗：未取得有效 Storage 網址。");
     }
-    return uploadedAsset;
+    return payload.asset;
   }
 
   async function uploadCover(contentId: string, file: File) {
@@ -251,37 +249,67 @@ export function ContentForm({
   }
 
   async function uploadBodyImage(blockId: string, file: File) {
-    if (!file.type.startsWith("image/")) {
-      setError("內文圖片必須是圖片檔案。");
+    if (!isLikelyImageFile(file)) {
+      setError("圖片上傳失敗：檔案格式不支援");
       return;
     }
     setError("");
     setUploadingBlockId(blockId);
+    setUploadStatus("圖片處理中");
     try {
       const current = await ensureArticleId();
       if (!current.id) throw new Error("找不到內容。");
+      setUploadStatus("圖片上傳中");
       const uploaded = await uploadImageAsset(current.id, file);
-      const nextBlocks = blocks.map((block) =>
-        block.id === blockId && block.type === "image"
-          ? {
-              ...block,
-              data: {
-                ...block.data,
-                url: uploaded.signed_url ?? "",
-                assetId: uploaded.id,
-              },
-            }
-          : block,
-      );
-      setBlocks(nextBlocks);
+      if (!uploaded.signed_url) {
+        throw new Error("圖片上傳失敗：未取得有效 Storage 網址。");
+      }
+      let nextBlocks: ArticleBlock[] = [];
+      setBlocks((currentBlocks) => {
+        nextBlocks = currentBlocks.map((block) =>
+          block.id === blockId && block.type === "image"
+            ? {
+                ...block,
+                data: {
+                  ...block.data,
+                  url: uploaded.signed_url ?? "",
+                  assetId: uploaded.id,
+                  storagePath: uploaded.storage_path,
+                },
+              }
+            : block,
+        );
+        return nextBlocks;
+      });
+      if (!nextBlocks.some((block) => block.id === blockId && block.type === "image")) {
+        throw new Error("圖片上傳失敗：找不到對應的圖片區塊。");
+      }
       const saved = await saveFields(current, nextBlocks);
-      setBlocks(hydrateArticleBlocksFromContent(saved));
-    } catch (uploadError) {
-      setError(
-        uploadError instanceof Error ? uploadError.message : "內文圖片上傳失敗。",
+      const reloaded = hydrateArticleBlocksFromContent(saved);
+      setBlocks(
+        reloaded.map((block) =>
+          block.id === blockId &&
+          block.type === "image" &&
+          !block.data.url &&
+          uploaded.signed_url
+            ? {
+                ...block,
+                data: {
+                  ...block.data,
+                  url: uploaded.signed_url,
+                  assetId: uploaded.id,
+                  storagePath: uploaded.storage_path,
+                },
+              }
+            : block,
+        ),
       );
+    } catch (uploadError) {
+      console.error("article body image upload failed", uploadError);
+      setError(mapMediaError(uploadError, "圖片上傳失敗。"));
     } finally {
       setUploadingBlockId("");
+      setUploadStatus("");
     }
   }
 
@@ -397,7 +425,7 @@ export function ContentForm({
 
   function chooseCover(file?: File) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!isLikelyImageFile(file)) {
       setError("封面必須是圖片檔案。");
       return;
     }
@@ -512,6 +540,7 @@ export function ContentForm({
           uploadingId={uploadingBlockId}
           onUploadImage={uploadBodyImage}
           onError={setError}
+          statusText={uploadStatus}
         />
 
         <div className="grid gap-5 sm:grid-cols-2">
@@ -535,7 +564,7 @@ export function ContentForm({
             <input
               ref={fileRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
               className="sr-only"
               onChange={(event) => chooseCover(event.target.files?.[0])}
             />

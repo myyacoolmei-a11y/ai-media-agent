@@ -44,7 +44,7 @@ export async function addSignedAssetUrls<T extends ContentAsset>(
 
 export async function loadContentWithAssets(
   content: ContentItem,
-  expiresIn = 3600,
+  expiresIn = 60 * 60 * 24,
 ) {
   if (isPreviewDemo()) {
     const hydrated = {
