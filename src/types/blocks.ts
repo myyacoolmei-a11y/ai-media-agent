@@ -27,7 +27,7 @@ export type GalleryLayout = z.infer<typeof galleryLayoutSchema>;
 
 export const galleryItemSchema = z.object({
   mediaAssetId: z.string().uuid().nullable().optional(),
-  url: z.string().min(1),
+  url: z.string().optional().default(""),
   storagePath: z.string().optional(),
   bucket: z.string().optional(),
   caption: z.string().max(500).optional().default(""),

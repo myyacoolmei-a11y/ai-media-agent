@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { loadArticleBlocks } from "@/lib/content/blocks";
 import { verifyContentAccess } from "@/lib/content/access";
+import { blockHasPublishableBody } from "@/lib/content/limits";
 import { isPreviewDemo, previewWriteBlocked } from "@/lib/preview";
 
 type RouteContext = {
@@ -29,12 +30,7 @@ export async function POST(request: Request, context: RouteContext) {
   const blocks = await loadArticleBlocks(contentId);
   const hasBody =
     Boolean(access.content.content.trim()) ||
-    blocks.some(
-      (block) =>
-        block.content.trim() ||
-        block.media_url ||
-        (Array.isArray(block.metadata?.items) && block.metadata.items.length),
-    );
+    blocks.some((block) => blockHasPublishableBody(block));
   if (
     payload.data.status === "published" &&
     (!access.content.title.trim() ||

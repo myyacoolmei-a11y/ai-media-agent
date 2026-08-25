@@ -42,6 +42,7 @@ import { blocksToPlainText } from "@/lib/content/blocks";
 import {
   MAX_ARTICLE_IMAGES,
   MAX_ARTICLE_VIDEOS,
+  blockHasPublishableBody,
   countArticleImages,
   countArticleVideos,
 } from "@/lib/content/limits";
@@ -321,7 +322,7 @@ export function ContentForm({
     return body.content;
   }
 
-  async function persist(nextStatus?: "draft" | "published") {
+  async function persist(nextStatus?: "draft" | "published"): Promise<string | null> {
     setBusy(nextStatus === "published" ? "publish" : "save");
     setError("");
     try {
@@ -333,7 +334,11 @@ export function ContentForm({
       if (!next.title.trim()) {
         throw new Error("請先填寫標題。");
       }
-      if (nextStatus === "published" && (!next.summary.trim() || (!next.content.trim() && !blocks.some((block) => block.content.trim() || block.mediaUrl || (Array.isArray(block.metadata.items) && block.metadata.items.length))))) {
+      if (
+        nextStatus === "published" &&
+        (!next.summary.trim() ||
+          (!next.content.trim() && !blocks.some((block) => blockHasPublishableBody(block))))
+      ) {
         throw new Error("發布前必須完成摘要與內文。");
       }
       if (countArticleImages(blocks) > MAX_ARTICLE_IMAGES) {
@@ -439,13 +444,21 @@ export function ContentForm({
       setSaved(true);
       window.setTimeout(() => setSaved(false), 1200);
       router.refresh();
+      return next.id ?? null;
     } catch (persistError) {
       setError(
         persistError instanceof Error ? persistError.message : "儲存失敗。",
       );
+      return null;
     } finally {
       setBusy("");
     }
+  }
+
+  async function handlePreview() {
+    const id = await persist("draft");
+    if (!id) return;
+    router.push(`/admin/content/${id}/preview`);
   }
 
   async function unpublish() {
@@ -544,15 +557,19 @@ export function ContentForm({
               發布
             </Button>
           )}
-          {article.id ? (
-            <Link
-              href={`/admin/content/${article.id}/preview`}
-              className="inline-flex h-9 items-center gap-1 rounded-full border border-white/10 px-3 text-xs text-zinc-400 hover:text-white"
-            >
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={Boolean(busy)}
+            onClick={() => void handlePreview()}
+          >
+            {busy === "save" ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
               <Eye className="size-3.5" />
-              預覽
-            </Link>
-          ) : null}
+            )}
+            預覽
+          </Button>
         </div>
       </div>
 

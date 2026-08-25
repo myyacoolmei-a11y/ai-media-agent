@@ -24,7 +24,8 @@ import {
   formatBytes,
 } from "@/lib/content/limits";
 import { optimizeArticleImage } from "@/lib/media/optimize-image";
-import { createClient } from "@/lib/supabase/client";
+import { uploadToSignedUrlWithProgress } from "@/lib/media/upload-signed";
+import { Html5Video } from "@/components/public/html5-video";
 import { cn } from "@/lib/utils";
 import type { MediaAsset } from "@/types/media";
 import { articleBlockTypeLabels, type ArticleBlockType, type GalleryLayout } from "@/types/blocks";
@@ -55,6 +56,7 @@ type GalleryItem = {
 type UploadTarget =
   | { mode: "new"; asGallery?: boolean; afterId?: string }
   | { mode: "gallery"; clientId: string }
+  | { mode: "gallery-replace"; clientId: string; index: number }
   | { mode: "replace"; clientId: string }
   | { mode: "poster"; clientId: string };
 
@@ -89,18 +91,37 @@ export function emptyEditorBlock(type: ArticleBlockType): EditorBlock {
 }
 
 export function toSavePayload(blocks: EditorBlock[]) {
-  return blocks.map((block, index) => ({
-    id: block.id,
-    type: block.type,
-    sortOrder: index,
-    content: block.content,
-    mediaUrl: block.mediaUrl,
-    thumbnailUrl: block.thumbnailUrl,
-    caption: block.caption,
-    source: block.source,
-    altText: block.altText,
-    metadata: block.metadata,
-  }));
+  return blocks.map((block, index) => {
+    const stored = typeof block.metadata.storagePath === "string" && block.metadata.storagePath;
+    const posterStored =
+      typeof block.metadata.posterPath === "string" && block.metadata.posterPath;
+    return {
+      id: block.id,
+      type: block.type,
+      sortOrder: index,
+      content: block.content,
+      mediaUrl: stored ? null : block.mediaUrl,
+      thumbnailUrl: stored || posterStored ? null : block.thumbnailUrl,
+      caption: block.caption,
+      source: block.source,
+      altText: block.altText,
+      metadata: persistMetadata(block.metadata),
+    };
+  });
+}
+
+function persistMetadata(metadata: Record<string, unknown>) {
+  const items = Array.isArray(metadata.items)
+    ? metadata.items.map((item) => {
+        if (!item || typeof item !== "object") return item;
+        const row = { ...(item as Record<string, unknown>) };
+        if (typeof row.storagePath === "string" && row.storagePath) {
+          delete row.url;
+        }
+        return row;
+      })
+    : metadata.items;
+  return { ...metadata, items: items ?? metadata.items };
 }
 
 function galleryItems(block: EditorBlock): GalleryItem[] {
@@ -128,6 +149,7 @@ export function BlockEditor({
   ensureArticleId: () => Promise<string>;
 }) {
   const [progress, setProgress] = useState("");
+  const [progressPercent, setProgressPercent] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [failures, setFailures] = useState<string[]>([]);
   const [library, setLibrary] = useState<{ kind: "image" | "video"; target: UploadTarget } | null>(null);
@@ -188,6 +210,19 @@ export function BlockEditor({
     const remainingImages = MAX_ARTICLE_IMAGES - imageCount;
     const remainingVideos = MAX_ARTICLE_VIDEOS - videoCount;
     const nextFailures: string[] = [];
+    if (target.mode === "replace" || target.mode === "gallery-replace" || target.mode === "poster") {
+      if (images.length > 1) {
+        for (const extra of images.slice(1)) {
+          nextFailures.push(`${extra.name}：更換時一次只能選 1 張。`);
+        }
+        images = images.slice(0, 1);
+      }
+      if (target.mode !== "replace") {
+        videos = [];
+      } else if (videos.length > 1) {
+        videos = videos.slice(0, 1);
+      }
+    }
     if (target.mode === "new" || target.mode === "gallery") {
       if (images.length > remainingImages) {
         for (const extra of images.slice(Math.max(remainingImages, 0))) {
@@ -225,7 +260,10 @@ export function BlockEditor({
         setProgress(`壓縮並上傳 ${done}/${total} ${file.name}`);
         try {
           const optimized = await optimizeArticleImage(file);
-          const uploaded = await uploadOne(optimized, "image");
+          const uploaded = await uploadOne(optimized, "image", (percent) => {
+            setProgressPercent(percent);
+            setProgress(`上傳 ${done}/${total} ${file.name} ${percent}%`);
+          });
           uploadedImages.push({
             url: uploaded.url,
             storagePath: uploaded.path,
@@ -253,7 +291,12 @@ export function BlockEditor({
         }
         setProgress(`上傳中 ${done}/${total} ${file.name}`);
         try {
-          uploadedVideos.push(await uploadOne(file, "video"));
+          uploadedVideos.push(
+            await uploadOne(file, "video", (percent) => {
+              setProgressPercent(percent);
+              setProgress(`上傳 ${done}/${total} ${file.name} ${percent}%`);
+            }),
+          );
           ok += 1;
         } catch (fileError) {
           nextFailures.push(
@@ -268,6 +311,7 @@ export function BlockEditor({
       setError(uploadError instanceof Error ? uploadError.message : "上傳失敗。");
     } finally {
       setProgress("");
+      setProgressPercent(null);
       uploadTarget.current = { mode: "new" };
     }
   }
@@ -288,6 +332,17 @@ export function BlockEditor({
           posterAssetId: uploadedImages[0].mediaAssetId,
         },
       });
+      return;
+    }
+    if (target.mode === "gallery-replace" && uploadedImages[0]) {
+      onChange(
+        blocksRef.current.map((block) => {
+          if (block.clientId !== target.clientId) return block;
+          const items = [...galleryItems(block)];
+          items[target.index] = { ...items[target.index], ...uploadedImages[0] };
+          return { ...block, metadata: { ...block.metadata, items } };
+        }),
+      );
       return;
     }
     if (target.mode === "gallery") {
@@ -371,7 +426,9 @@ export function BlockEditor({
   function applyLibrary(assets: MediaAsset[]) {
     const target = library?.target ?? uploadTarget.current;
     const remainingImages =
-      MAX_ARTICLE_IMAGES - countArticleImages(blocksRef.current);
+      target.mode === "replace" || target.mode === "poster" || target.mode === "gallery-replace"
+        ? 1
+        : MAX_ARTICLE_IMAGES - countArticleImages(blocksRef.current);
     const remainingVideos =
       MAX_ARTICLE_VIDEOS - countArticleVideos(blocksRef.current);
     const images: GalleryItem[] = assets
@@ -393,7 +450,7 @@ export function BlockEditor({
         id: asset.id,
       }));
     const limitedImages =
-      target.mode === "replace" || target.mode === "poster"
+      target.mode === "replace" || target.mode === "poster" || target.mode === "gallery-replace"
         ? images.slice(0, 1)
         : images.slice(0, Math.max(remainingImages, 0));
     const limitedVideos =
@@ -410,13 +467,24 @@ export function BlockEditor({
     applyUploads(target, limitedImages, limitedVideos);
   }
 
-  async function uploadOne(file: File, type: "image" | "video") {
+  async function uploadOne(
+    file: File,
+    type: "image" | "video",
+    onProgress?: (percent: number) => void,
+  ) {
+    const mimeType =
+      file.type ||
+      (/\.(heic|heif)$/i.test(file.name)
+        ? "image/heic"
+        : /\.mov$/i.test(file.name)
+          ? "video/quicktime"
+          : file.type);
     const prepare = await fetch("/api/media", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         fileName: file.name,
-        mimeType: file.type,
+        mimeType,
         sizeBytes: file.size,
         type,
       }),
@@ -429,12 +497,12 @@ export function BlockEditor({
     if (!prepare.ok || !prepared.asset || !prepared.upload) {
       throw new Error(prepared.error || "無法準備上傳。");
     }
-    const { error: uploadError } = await createClient()
-      .storage.from("content-media")
-      .uploadToSignedUrl(prepared.upload.path, prepared.upload.token, file, {
-        contentType: file.type,
-      });
-    if (uploadError) throw uploadError;
+    await uploadToSignedUrlWithProgress(
+      prepared.upload.path,
+      prepared.upload.token,
+      file,
+      onProgress ?? (() => undefined),
+    );
     const complete = await fetch(`/api/media/${prepared.asset.id}/complete`, {
       method: "POST",
     });
@@ -538,10 +606,20 @@ export function BlockEditor({
 
       {error ? <p className="mt-4 text-xs text-rose-300">{error}</p> : null}
       {progress ? (
-        <p className="mt-4 flex items-center gap-2 text-xs text-zinc-500">
-          <LoaderCircle className="size-3.5 animate-spin" />
-          {progress}
-        </p>
+        <div className="mt-4 space-y-2">
+          <p className="flex items-center gap-2 text-xs text-zinc-500">
+            <LoaderCircle className="size-3.5 animate-spin" />
+            {progress}
+          </p>
+          {progressPercent != null ? (
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-[#d3b176] transition-[width]"
+                style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+              />
+            </div>
+          ) : null}
+        </div>
       ) : null}
       {failures.length ? (
         <ul className="mt-3 space-y-1 text-[11px] text-rose-300">
@@ -644,6 +722,24 @@ export function BlockEditor({
                         : { mode: "replace", clientId: block.clientId },
                   })
                 }
+                onReplaceGalleryImage={(index) => {
+                  uploadTarget.current = {
+                    mode: "gallery-replace",
+                    clientId: block.clientId,
+                    index,
+                  };
+                  imageRef.current?.click();
+                }}
+                onLibraryGalleryImage={(index) =>
+                  setLibrary({
+                    kind: "image",
+                    target: {
+                      mode: "gallery-replace",
+                      clientId: block.clientId,
+                      index,
+                    },
+                  })
+                }
               />
               <div className="mt-3 flex flex-wrap gap-2">
                 {PRIMARY_ADD.map((item) => (
@@ -680,6 +776,8 @@ function BlockFields({
   onPickVideo,
   onPickPoster,
   onLibrary,
+  onReplaceGalleryImage,
+  onLibraryGalleryImage,
 }: {
   block: EditorBlock;
   onChange: (patch: Partial<EditorBlock>) => void;
@@ -687,6 +785,8 @@ function BlockFields({
   onPickVideo: () => void;
   onPickPoster: () => void;
   onLibrary: () => void;
+  onReplaceGalleryImage: (index: number) => void;
+  onLibraryGalleryImage: (index: number) => void;
 }) {
   if (block.type === "divider") {
     return <hr className="mt-4 border-white/10" />;
@@ -762,13 +862,10 @@ function BlockFields({
     return (
       <div className="mt-3 space-y-3">
         {block.mediaUrl ? (
-          <video
+          <Html5Video
             src={block.mediaUrl}
-            poster={block.thumbnailUrl ?? undefined}
-            controls
-            preload="metadata"
-            playsInline
-            className="h-auto w-full rounded-xl bg-black"
+            poster={block.thumbnailUrl}
+            className="mt-0"
           />
         ) : (
           <button type="button" onClick={onPickVideo} className="grid aspect-video w-full place-items-center rounded-xl border border-dashed border-white/10 text-zinc-600">
@@ -889,6 +986,12 @@ function BlockFields({
                   預覽
                 </a>
               ) : null}
+              <button type="button" className="text-[#d3b176]" onClick={() => onReplaceGalleryImage(index)}>
+                更換
+              </button>
+              <button type="button" onClick={() => onLibraryGalleryImage(index)}>
+                媒體庫
+              </button>
               <button
                 type="button"
                 onClick={() =>

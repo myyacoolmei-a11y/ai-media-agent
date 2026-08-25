@@ -2,8 +2,10 @@ import Link from "next/link";
 
 import { AdSlot } from "@/components/public/ad-slot";
 import { GalleryLightbox } from "@/components/public/gallery-lightbox";
+import { Html5Video } from "@/components/public/html5-video";
 import { parseEmbed } from "@/lib/content/embed";
 import { galleryLayoutClass, hasRenderableBlocks } from "@/lib/content/blocks";
+import { isDirectVideoUrl } from "@/lib/content/video";
 import type { ArticleBlock } from "@/types/blocks";
 import type { PublicContentItem } from "@/types/content";
 import type { ServedAd } from "@/types/ads";
@@ -77,12 +79,33 @@ export function ArticleBody({
 }) {
   const blocks = story.blocks ?? [];
   if (!hasRenderableBlocks(blocks)) {
+    const videoUrl = story.videoUrl?.trim() || "";
     return (
       <div className="mt-12 space-y-6 border-t border-white/[0.07] pt-10">
         {story.content ? (
           <div className="whitespace-pre-wrap text-base leading-9 text-zinc-300">
             {story.content}
           </div>
+        ) : null}
+        {videoUrl && isDirectVideoUrl(videoUrl) ? <Html5Video src={videoUrl} /> : null}
+        {videoUrl && !isDirectVideoUrl(videoUrl) ? (
+          <EmbedBlock
+            block={{
+              id: `legacy-embed-${story.id ?? story.slug}`,
+              article_id: story.id ?? story.slug,
+              type: "embed",
+              sort_order: 0,
+              content: "",
+              media_url: videoUrl,
+              thumbnail_url: null,
+              caption: "",
+              source: "",
+              alt_text: "",
+              metadata: { url: videoUrl },
+              created_at: "",
+              updated_at: "",
+            }}
+          />
         ) : null}
       </div>
     );
@@ -180,7 +203,7 @@ function BlockView({
   if (block.type === "video") {
     if (!block.media_url) return null;
     return (
-      <figure>
+      <div>
         {videoAds.length ? (
           <AdSlot
             ads={videoAds}
@@ -189,18 +212,12 @@ function BlockView({
             className="mb-4"
           />
         ) : null}
-        <video
+        <Html5Video
           src={block.media_url}
-          poster={block.thumbnail_url ?? undefined}
-          controls
-          preload="metadata"
-          playsInline
-          className="h-auto w-full rounded-2xl bg-black"
+          poster={block.thumbnail_url}
+          caption={block.caption}
         />
-        {block.caption ? (
-          <figcaption className="mt-2 text-[11px] text-zinc-500">{block.caption}</figcaption>
-        ) : null}
-      </figure>
+      </div>
     );
   }
   if (block.type === "embed") {

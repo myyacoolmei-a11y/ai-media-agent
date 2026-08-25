@@ -56,6 +56,12 @@ export function legacyBlocksFromContent(content: ContentItem): ArticleBlock[] {
   return blocks;
 }
 
+export async function loadRenderableBlocks(content: ContentItem): Promise<ArticleBlock[]> {
+  const raw = await loadArticleBlocks(content.id);
+  if (raw.length) return hydrateBlockMedia(raw);
+  return legacyBlocksFromContent(content);
+}
+
 export async function loadArticleBlocks(articleId: string): Promise<ArticleBlock[]> {
   try {
     const { data, error } = await createAdminClient()

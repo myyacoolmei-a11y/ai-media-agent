@@ -1,5 +1,5 @@
 import { addSignedAssetUrls } from "@/lib/content/access";
-import { hydrateBlockMedia, loadArticleBlocks } from "@/lib/content/blocks";
+import { loadRenderableBlocks } from "@/lib/content/blocks";
 import { isMissingRelation } from "@/lib/db/missing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ArticleBlock } from "@/types/blocks";
@@ -72,8 +72,7 @@ export async function serializePublicContent(
     60 * 60 * 24,
   );
   const cover = assets.find((asset) => asset.id === content.cover_asset_id);
-  const rawBlocks = await loadArticleBlocks(content.id);
-  const blocks = await attachRelatedTitles(await hydrateBlockMedia(rawBlocks));
+  const blocks = await attachRelatedTitles(await loadRenderableBlocks(content));
 
   let sponsorName: string | null = null;
   if (content.sponsor_id) {
